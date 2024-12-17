@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.8
 #
 # Copyright (C) 2019 Lawrence Livermore National Security, LLC
 # Please see top-level LICENSE for details.
@@ -26,9 +26,11 @@ import time
 import pathlib
 import configparser
 import requests
+import logging
 import urllib.request
 import urllib.error
 import http.cookiejar
+import platform
 import ssl
 import json
 import xml.etree.ElementTree
@@ -49,33 +51,53 @@ class IncompatibleParameterError(Exception):
     def __init__(self, *args, **kwargs):
         Exception.__init__(self, *args, **kwargs)
 
+class TLSAdapter(requests.adapters.HTTPAdapter):
+
+    #--------------------------------------------------------------------------
+    #
+    def __init__(self, **kwargs):
+        super(TLSAdapter, self).__init__(**kwargs)
+
+    #--------------------------------------------------------------------------
+    #
+    def init_poolmanager(self, *pool_args, **pool_kwargs):
+        context = ssl._create_unverified_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.maximum_version = ssl.TLSVersion.TLSv1_3
+        context.options = ssl.PROTOCOL_TLS & ssl.OP_NO_TLSv1 & ssl.OP_NO_TLSv1_1
+        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+        self.poolmanager = requests.packages.urllib3.poolmanager.PoolManager(ssl_context=context)
+
 class SpectraLogicAPI:
 
     #--------------------------------------------------------------------------
     #
     def __init__(self, args):
-        self.server         = args.server
-        self.port           = args.port
-        self.user           = args.user
-        self.passwd         = args.passwd
-        self.verbose        = args.verbose
-        self.insecure       = args.insecure
-        self.longlist       = args.longlist
-        self.loggedin       = False
-        self.token          = ""
-        self.tokenexpiresat = -1
-        self.refreshuntil   = -1
-        self.sessionid      = ""
-        self.cookiefile     = self.slapi_directory() + "/cookies.txt"
-        self.cookiejar      = http.cookiejar.LWPCookieJar()
+        self.server            = args.server
+        self.port              = args.port
+        self.user              = args.user
+        self.passwd            = args.passwd
+        self.verbose           = args.verbose
+        self.insecure          = args.insecure
+        self.longlist          = args.longlist
+        self.loggedin          = False
+        self.token             = ""
+        self.tokenexpiresat    = -1
+        self.refreshuntil      = -1
+        self.session           = requests.session()
+        self.sessionid         = ""
+        self.cookiefile        = self.slapi_directory() + "/cookies_lumos.txt"
         self.load_cookie()
-        httpstr = "https://"
-        if args.insecure == True:
+        if args.insecure == False:
+            httpstr = "https://"
+            self.adapter = TLSAdapter()
+        else:
             httpstr = "http://"
+            self.adapter = HTTPAdapter()
         self.baseurl = httpstr + args.server + "/api"
+        self.session.mount(httpstr, self.adapter)
         if args.port is not None:
             self.baseurl = httpstr + args.server + ":" + str(args.port) + "/api"
-
 
     #--------------------------------------------------------------------------
     #
@@ -172,12 +194,15 @@ class SpectraLogicAPI:
             tmpserver = self.server
             if tmpserver.find(".") == -1:
                 tmpserver = tmpserver + ".local"
-            for cookie in self.cookiejar:
+            for cookie in self.session.cookies:
                 if cookie.domain == tmpserver:
-                    self.cookiejar.clear(cookie.domain)
+                    self.session.cookies.clear(cookie.domain)
         except Exception as e:
-            self.loggedin  = False
-            self.sessionid = ""
+            self.loggedin       = False
+            self.sessionid      = ""
+            self.token          = ""
+            self.tokenexpiresat = -1
+            self.refreshuntil   = -1
 
 
     #--------------------------------------------------------------------------
@@ -188,25 +213,39 @@ class SpectraLogicAPI:
             tmpserver = self.server
             if tmpserver.find(".") == -1:
                 tmpserver = tmpserver + ".local"
-            self.cookiejar.load(self.cookiefile, ignore_discard=True, ignore_expires=False)
-            for cookie in self.cookiejar:
-                if cookie.domain == tmpserver and cookie.name == "sessionID":
-                    if cookie.is_expired() or self.cookie_is_old():
-                        self.clear_cookie()
-                        os.umask(0o077)
-                        self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
-                        self.loggedin  = False
-                        self.sessionid = ""
-                    else:
-                        self.sessionid = cookie.value
-                        self.loggedin = True
-                        return
+            lwp_cookiejar = http.cookiejar.LWPCookieJar()
+            lwp_cookiejar.load(self.cookiefile, ignore_discard=True, ignore_expires=False)
+
+            for cookie in lwp_cookiejar:
+                if cookie.domain == tmpserver and cookie.name == "Authorization":
+                    match = re.search("\"Bearer\s+(.*?)\"", cookie.value)
+                    self.token = match.group(1)
+                    self.loggedin = True
 
         except Exception as e:
+            self.save_cookies()
+            self.loggedin       = False
+            self.sessionid      = ""
+            self.token          = ""
+            self.tokenexpiresat = -1
+            self.refreshuntil   = -1
+
+    #--------------------------------------------------------------------------
+    #
+    def save_cookies(self):
+        try:
             os.umask(0o077)
-            self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
-            self.loggedin  = False
-            self.sessionid = ""
+            lwp_cookiejar = http.cookiejar.LWPCookieJar()
+            for cookie in self.session.cookies:
+                lwp_cookiejar.set_cookie(cookie)
+            lwp_cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
+        except Exception as e:
+            os.umask(0o077)
+            self.loggedin       = False
+            self.sessionid      = ""
+            self.token          = ""
+            self.tokenexpiresat = -1
+            self.refreshuntil   = -1
 
 
     #--------------------------------------------------------------------------
@@ -263,7 +302,7 @@ class SpectraLogicAPI:
 	# Return either JSON object by default, or the data as a string if
 	# the returnstring parameter is set to True.
     #
-    def run_command(self, url, headers=None, params=None, post=False, returnstring=False):
+    def run_command(self, url, params=None, post=False, returnstring=False):
 
         try:
 
@@ -274,73 +313,14 @@ class SpectraLogicAPI:
                 print("--------------------------------------------------", file=sys.stderr)
                 print("", file=sys.stderr)
 
-            # FIXME someday...
-            #
-            # The libraries currently use self-signed certs Do not verify the
-            # certificate for now...  Also use medium encryption cipher suite
-            # At come point we should be able to completely get rid of the code
-            # for setting the cipher.
-            #
-            # Explanations for the cipher names
-            #
-            # HIGH
-            #
-            # "High" encryption cipher suites. This currently means those with
-            # key lengths larger than 128 bits, and some cipher suites with
-            # 128-bit keys.
-            #
-            # MEDIUM
-            #
-            # "Medium" encryption cipher suites, currently some of those using
-            # 128 bit encryption.
-            #
-            # LOW
-            #
-            # "Low" encryption cipher suites, currently those using 64 or 56
-            # bit encryption algorithms but excluding export cipher suites. All
-            # these cipher suites have been removed as of OpenSSL 1.1.0.
-            #
-            # eNULL, NULL
-            #
-            # The "NULL" ciphers that is those offering no encryption. Because
-            # these offer no encryption at all and are a security risk they are
-            # not enabled via either the DEFAULT or ALL cipher strings. Be
-            # careful when building cipherlists out of lower-level primitives
-            # such as kRSA or aECDSA as these do overlap with the eNULL
-            # ciphers. When in doubt, include !eNULL in your cipherlist.
-            #
-            # aNULL
-            #
-            # The cipher suites offering no authentication. This is currently
-            # the anonymous DH algorithms and anonymous ECDH algorithms. These
-            # cipher suites are vulnerable to "man in the middle" attacks and
-            # so their use is discouraged. These are excluded from the DEFAULT
-            # ciphers, but included in the ALL ciphers. Be careful when
-            # building cipherlists out of lower-level primitives such as kDHE
-            # or AES as these do overlap with the aNULL ciphers. When in doubt,
-            # include !aNULL in your cipherlist.
-
-            cipherstr = 'HIGH:MEDIUM:!aNULL:!eNULL'
-
-            context = ssl._create_unverified_context()
-            context.set_ciphers(cipherstr)
-
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-            requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS = cipherstr
-            #http.client.HTTPConnection.debuglevel = 1
-            #logging.basicConfig()
-            #logging.getLogger().setLevel(logging.DEBUG)
-
-            #requests_log = logging.getLogger("requests.packages.urllib3")
-            #requests_log.setLevel(logging.DEBUG)
-            #requests_log.propagate = True
-
             try:
+
+                headers   = { "Content-Type": "application/json", "Authorization": f"Bearer {self.token}" }
+
                 if post:
-                    response  = requests.post(url, json=params, headers=headers, verify=False, allow_redirects=True)
+                    response  = self.session.post(url, json=params, headers=headers, verify=False, allow_redirects=True)
                 else:
-                    print(f"{headers}")
-                    response  = requests.get(url, headers=headers, verify=False, allow_redirects=True)
+                    response  = self.session.get(url, headers=headers, verify=False, allow_redirects=True)
                 jsonstr   = response.text
             except Exception as e:
                 raise(e)
@@ -393,7 +373,7 @@ class SpectraLogicAPI:
                         self.login()
                         if (self.verbose):
                             print("Re-running command", file=sys.stderr)
-                        return(self.run_command(url, filename, returnstring))
+                            return(self.run_command(url, params=params, post=post, returnstring=returnstring))
                     else:
                         raise(e)
                 except Exception as e:
@@ -435,19 +415,13 @@ class SpectraLogicAPI:
                 return(False)
 
             # Check for system error
-            #if tree.tag == "error":
-            #    for child in tree:
-            #        if (child.text.find("Error: No active session found.") >= 0):
-            #            raise(SpectraLogicLoginError("Error: No active session found."))
-            #    errstr = ""
-            #    errstr = self.get_all_text(tree, errstr)
-            #    raise(Exception(errstr))
-
-            # Check for syntax error
-            #if tree.tag == "syntaxError":
-            #    errstr = ""
-            #    errstr = self.get_all_text(tree, errstr)
-            #    raise(Exception(errstr))
+            if "error" in jsonobj:
+                errstr = ""
+                if self.loggedin == False:
+                    raise(SpectraLogicLoginError("Error: No active session found."))
+                if "message" in jsonobj["error"]:
+                    errstr = jsonobj["error"]["message"]
+                raise(Exception(errstr))
 
         except SpectraLogicLoginError as e:
             raise(e)
@@ -460,6 +434,29 @@ class SpectraLogicAPI:
 
         return(False)
 
+    def frus(self):
+
+        try:
+            # FIXME for now force a login
+            self.login()
+
+            url     = self.baseurl + "/frus"
+            params = dict()
+            jsonobj = self.run_command(url, params=params, post=False)
+
+            for key in jsonobj:
+                fruobjs = jsonobj["value"]
+                for fruobj in fruobjs:
+                    frustatus = None
+                    if "name" in fruobj:
+                        url = self.baseurl + f"/frus/{fruobj['name']}/status"
+                        params = dict()
+                        frustatus = self.run_command(url, params=params, post=False)
+                    self.print_fru_status(fruobj, frustatus)
+
+        except Exception as e:
+            raise(e)
+
     def inventory(self):
 
         try:
@@ -468,10 +465,7 @@ class SpectraLogicAPI:
 
             url    = self.baseurl + "/inventory"
             params = dict()
-            headers   = { "Content-Type": "application/json", "Authorization": f"Bearer {self.token}" }
-            params = dict()
-            jsonobj = self.run_command(url, headers=headers, params=params, post=False)
-            print(f"{jsonobj}")
+            jsonobj = self.run_command(url, params=params, post=False)
 
         except Exception as e:
             raise(e)
@@ -479,15 +473,9 @@ class SpectraLogicAPI:
     def librarystatus(self):
 
         try:
-            # FIXME for now force a login
-            self.login()
-
             url    = self.baseurl + "/library/status"
             params = dict()
-            headers   = { "Content-Type": "application/json", "Authorization": f"Bearer {self.token}" }
-            params = dict()
-            jsonobj = self.run_command(url, headers=headers, params=params, post=False)
-            print(f"{jsonobj}")
+            jsonobj = self.run_command(url, params=params, post=False)
 
         except Exception as e:
             raise(e)
@@ -508,37 +496,41 @@ class SpectraLogicAPI:
             params["username"] = self.user
             params["password"] = self.passwd
             jsonobj = self.run_command(url, params=params, post=True)
-            print(f"{jsonobj}")
 
             for key in jsonobj:
+                if key.casefold() == "error".casefold():
+                    if jsonobj["error"]["code"] == 401:
+                        print("Login Failed...\n", file=sys.stderr)
+                        self.loggedin       = False
+                        self.sessionid      = ""
+                        self.token          = ""
+                        self.tokenexpiresat = -1
+                        self.refreshuntil   = -1
+                        self.clear_cookie()
+                        self.save_cookies()
+                        break
                 if key.casefold() == "passwordHasExpired".casefold():
                     if jsonobj[key] == True:
-                        self.loggedin = False
-                        self.sessionid = ""
+                        self.loggedin       = False
+                        self.sessionid      = ""
+                        self.token          = ""
+                        self.tokenexpiresat = -1
+                        self.refreshuntil   = -1
                         self.clear_cookie()
-                        os.umask(0o077)
-                        self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
+                        self.save_cookies()
                         break
                 if key.casefold() == "refreshUntil".casefold():
                     self.refreshuntil = int(jsonobj[key])
+                    continue
                 if key.casefold() == "token".casefold():
                     self.token = jsonobj[key]
+                    continue
                 if key.casefold() == "tokenExpiresAt".casefold():
                     self.tokenexpiresat = int(jsonobj[key])
+                    continue
 
-            #for child in tree:
-            #    if child.tag == "status" and child.text == "OK":
-            #        os.umask(0o077)
-            #        self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
-            #        self.load_cookie()
-
-            #if self.loggedin == False:
-            #    print("Login Failed...\n", file=sys.stderr)
-            #    self.loggedin  = False
-            #    self.sessionid = ""
-            #    self.clear_cookie()
-            #    os.umask(0o077)
-            #    self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
+            print(self)
+            self.save_cookies()
 
         except Exception as e:
             raise(e)
@@ -551,14 +543,53 @@ class SpectraLogicAPI:
 
             url    = self.baseurl + "/spec"
             params = dict()
-            headers   = { "Content-Type": "application/json", "Authorization": f"Bearer {self.token}" }
-            params = dict()
-            yamlstr = self.run_command(url, headers=headers, params=params, post=False, returnstring=True)
+            yamlstr = self.run_command(url, params=params, post=False, returnstring=True)
+
             print(f"{yamlstr}")
 
         except Exception as e:
             raise(e)
 
+    def print_fru_status(self, fruobj, frustatus):
+
+        for key in fruobj:
+            if key.casefold() == "actions".casefold():
+                next
+            if key.casefold() == "type".casefold():
+                if fruobj["type"].casefold() == "CAN_OVER_POWER".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "DRIVE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "EXPORT_CONTROL_MODULE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "FRAME_CONTROL_MODULE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "FRAME_MANAGEMENT_MODULE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "LS".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "NETWORK_SWITCH".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "POWER_CONTROL_MODULE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "POWER_SUPPLY".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "ROBOT".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "SERVICE_CONTROL_MODULE".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "PMM".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "FMM".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "FCM".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "CAN_REPEATER".casefold():
+                    pass
+                elif fruobj["type"].casefold() == "ROBOTICS_INTERFACE_MODULE".casefold():
+                    pass
+            print(f"Key: {key} Value: {fruobj[key]}")
+        print("")
 
     #--------------------------------------------------------------------------
     #
@@ -573,11 +604,13 @@ class SpectraLogicAPI:
         except Exception as e:
             print("Logout Error: " + str(e), file=sys.stderr)
 
-        self.loggedin  = False
-        self.sessionid = ""
+        self.loggedin       = False
+        self.sessionid      = ""
+        self.token          = ""
+        self.tokenexpiresat = -1
+        self.refreshuntil   = -1
         self.clear_cookie()
-        os.umask(0o077)
-        self.cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
+        self.save_cookies()
 
 #==============================================================================
 # This area defines some routines for unit testing
@@ -784,6 +817,9 @@ def main():
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
 
+    frus_parser = cmdsubparsers.add_parser('frus',
+        help='Retrieve a list of hardware field replaceable units currently in the library.')
+
     inventory_parser = cmdsubparsers.add_parser('inventory',
         help='Retrieve inventory from the library.')
 
@@ -858,6 +894,8 @@ def main():
         if args.command is None:
             cmdparser.print_help()
             sys.exit(1)
+        elif args.command == "frus":
+            slapi.frus()
         elif args.command == "inventory":
             slapi.inventory()
         elif args.command == "librarystatus":
@@ -874,8 +912,6 @@ def main():
         if hasattr(args, "subcommand") and args.subcommand is not None:
             fullcommand = args.command + " " + args.subcommand
         print("Command '" + fullcommand + "': " + str(e), file=sys.stderr)
-        #if (args.verbose):
-            #traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
