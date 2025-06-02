@@ -1,0 +1,168 @@
+Index: lumosapi_client/README
+===================================================================
+--- /dev/null
++++ lumosapi_client/README
+@@ -0,0 +1 @@
++This is the LLNL patched version of the LumOS client
+Index: lumosapi_client/lumosapi_client/rest.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/rest.py
++++ lumosapi_client/lumosapi_client/rest.py
+@@ -18,6 +18,7 @@ import re
+ import ssl
+ 
+ import urllib3
++import requests
+ 
+ from lumosapi_client.exceptions import ApiException, ApiValueError
+ 
+@@ -65,6 +66,12 @@ class RESTClientObject:
+         # https://github.com/shazow/urllib3/blob/f9409436f83aeb79fbaf090181cd81b784f1b8ce/urllib3/connectionpool.py#L680  # noqa: E501
+         # Custom SSL certificates and client certificates: http://urllib3.readthedocs.io/en/latest/advanced-usage.html  # noqa: E501
+ 
++        context = ssl._create_unverified_context()
++        context.minimum_version = ssl.TLSVersion.TLSv1_2
++        context.maximum_version = ssl.TLSVersion.TLSv1_3
++        context.options = ssl.PROTOCOL_TLS & ssl.OP_NO_TLSv1 & ssl.OP_NO_TLSv1_1
++        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
++
+         # cert_reqs
+         if configuration.verify_ssl:
+             cert_reqs = ssl.CERT_REQUIRED
+@@ -76,7 +83,7 @@ class RESTClientObject:
+             "ca_certs": configuration.ssl_ca_cert,
+             "cert_file": configuration.cert_file,
+             "key_file": configuration.key_file,
+-            "ca_cert_data": configuration.ca_cert_data,
++            "ssl_context": context,
+         }
+         if configuration.assert_hostname is not None:
+             pool_args['assert_hostname'] = (
+Index: lumosapi_client/lumosapi_client/models/fru_list.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/fru_list.py
++++ lumosapi_client/lumosapi_client/models/fru_list.py
+@@ -23,6 +23,8 @@ from lumosapi_client.models.fru import F
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class FRUList(BaseModel):
+     """
+     List of Field Replaceable Units
+@@ -47,7 +49,7 @@ class FRUList(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/package.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/package.py
++++ lumosapi_client/lumosapi_client/models/package.py
+@@ -24,6 +24,8 @@ from lumosapi_client.models.firmware imp
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class Package(BaseModel):
+     """
+     Package
+@@ -49,7 +51,7 @@ class Package(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/datetime_encoder.py
+===================================================================
+--- /dev/null
++++ lumosapi_client/lumosapi_client/models/datetime_encoder.py
+@@ -0,0 +1,13 @@
++# coding: utf-8
++
++import json
++import datetime
++
++class DateTimeEncoder(json.JSONEncoder):
++    def default(self, z):
++        if isinstance(z, datetime.datetime):
++            return (str(z))
++        if isinstance(z, datetime.date):
++            return (str(z))
++        else:
++            return super().default(z)
+Index: lumosapi_client/lumosapi_client/models/package_list.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/package_list.py
++++ lumosapi_client/lumosapi_client/models/package_list.py
+@@ -23,6 +23,8 @@ from lumosapi_client.models.package impo
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class PackageList(BaseModel):
+     """
+     A list of packages that have been uploaded to the library, including the currently active package
+@@ -47,7 +49,7 @@ class PackageList(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/library_status.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/library_status.py
++++ lumosapi_client/lumosapi_client/models/library_status.py
+@@ -26,6 +26,8 @@ from lumosapi_client.models.ntp_status i
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class LibraryStatus(BaseModel):
+     """
+     General status of library hardware and software. All fields are read-only.
+@@ -51,7 +53,7 @@ class LibraryStatus(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/package_state.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/package_state.py
++++ lumosapi_client/lumosapi_client/models/package_state.py
+@@ -28,6 +28,8 @@ from lumosapi_client.models.task_types i
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class PackageState(BaseModel):
+     """
+     Summary and detailed information about a package update. If an update is in progress, this will show the in-progress state. Otherwise, it will show the final status of the last update. An update comprises several specific subtasks updating different components of the overall system. Which component updaters are run as part of an update to a particular package depends on which files are actually present in the new package.
+@@ -64,7 +66,7 @@ class PackageState(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:

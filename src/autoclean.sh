@@ -30,5 +30,6 @@ for DIR in ${DIRS[*]}; do
     rm -rf .deps
     rm -rf .libs
     rm -rf py-compile
+	rm -rf lumosapi_client
     popd >& /dev/null
 done

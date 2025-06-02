@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.8
+#!/usr/bin/env python3.11
 #
 # Copyright (C) 2019 Lawrence Livermore National Security, LLC
 # Please see top-level LICENSE for details.
@@ -16,28 +16,34 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
+import os
+# Use the local lumosapi_client if it exists
+if os.path.isdir("lumosapi_client"):
+    sys.path.append("lumosapi_client")
+
 import argparse
 import getpass
 import functools
-import sys
-import os
 import stat
 import time
 import pathlib
 import configparser
-import requests
 import logging
 import urllib.request
 import urllib.error
-import http.cookiejar
 import platform
-import ssl
 import json
-import xml.etree.ElementTree
-import xml.dom.minidom
-import traceback
 import datetime
 import re
+import pandas
+from pprint import pprint
+import importlib
+
+import lumosapi_client
+from lumosapi_client.models.fru_list import FRUList
+from lumosapi_client.models.fru_types import FRUTypes
+from lumosapi_client.rest import ApiException
 
 class SpectraLogicLoginError(Exception):
 
@@ -46,58 +52,58 @@ class SpectraLogicLoginError(Exception):
     def __init__(self, *args, **kwargs):
         Exception.__init__(self, *args, **kwargs)
 
-class IncompatibleParameterError(Exception):
-
-    def __init__(self, *args, **kwargs):
-        Exception.__init__(self, *args, **kwargs)
-
-class TLSAdapter(requests.adapters.HTTPAdapter):
-
-    #--------------------------------------------------------------------------
-    #
-    def __init__(self, **kwargs):
-        super(TLSAdapter, self).__init__(**kwargs)
-
-    #--------------------------------------------------------------------------
-    #
-    def init_poolmanager(self, *pool_args, **pool_kwargs):
-        context = ssl._create_unverified_context()
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.maximum_version = ssl.TLSVersion.TLSv1_3
-        context.options = ssl.PROTOCOL_TLS & ssl.OP_NO_TLSv1 & ssl.OP_NO_TLSv1_1
-        requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
-        self.poolmanager = requests.packages.urllib3.poolmanager.PoolManager(ssl_context=context)
-
 class SpectraLogicAPI:
 
     #--------------------------------------------------------------------------
     #
     def __init__(self, args):
+        self.first_try         = True
         self.server            = args.server
         self.port              = args.port
         self.user              = args.user
         self.passwd            = args.passwd
-        self.verbose           = args.verbose
+        self.json              = args.json
+        self.debug             = args.debug
         self.insecure          = args.insecure
         self.longlist          = args.longlist
         self.loggedin          = False
         self.token             = ""
         self.tokenexpiresat    = -1
         self.refreshuntil      = -1
-        self.session           = requests.session()
-        self.sessionid         = ""
         self.cookiefile        = self.slapi_directory() + "/cookies_lumos.txt"
-        self.load_cookie()
         if args.insecure == False:
             httpstr = "https://"
-            self.adapter = TLSAdapter()
         else:
             httpstr = "http://"
-            self.adapter = HTTPAdapter()
         self.baseurl = httpstr + args.server + "/api"
-        self.session.mount(httpstr, self.adapter)
         if args.port is not None:
             self.baseurl = httpstr + args.server + ":" + str(args.port) + "/api"
+
+        self.load_cookie()
+
+        if self.token == "":
+            self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}")
+        else:
+            self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}",
+                                                               access_token=self.token)
+
+        self.configuration.verify_ssl = False
+        self.configuration.client_side_validation = False
+        self.configuration.debug = args.debug
+
+        # Initialize pandas default settings
+        pandas.options.display.max_columns = None
+        pandas.options.display.max_colwidth = None
+        pandas.options.display.max_rows = None
+        pandas.set_option('expand_frame_repr', False)
+
+    #--------------------------------------------------------------------------
+    #
+    def token_to_json(self):
+        return {'server': self.server,
+                'token': self.token,
+                'token_expires_at': self.tokenexpiresat,
+                'refresh_until': self.refreshuntil}
 
     #--------------------------------------------------------------------------
     #
@@ -106,13 +112,15 @@ class SpectraLogicAPI:
                f"Port:          {self.port}\n"
                f"Username:      {self.user}\n"
                f"Password:      ****\n"
-               f"Verbose:       {self.verbose}\n"
+               f"Json:          {self.json}\n"
+               f"Debug:         {self.debug}\n"
                f"Insecure:      {self.insecure}\n"
                f"Long List:     {self.longlist}\n"
                f"Logged In:     {self.loggedin}\n"
                f"Token:         {self.token}\n"
                f"Expires At:    {datetime.datetime.fromtimestamp(self.tokenexpiresat)}\n"
                f"Refresh Until: {datetime.datetime.fromtimestamp(self.refreshuntil)}\n")
+
     #--------------------------------------------------------------------------
     #
     def slapi_directory(self):
@@ -145,87 +153,60 @@ class SpectraLogicAPI:
 
         try:
             now   = time.time()
-            mtime = os.stat(self.cookiefile)[stat.ST_MTIME]
-            age   = now - mtime
-            if age < 3600:
-                return(False)
-            else:
+            if now >= self.tokenexpiresat:
                 return(True)
+            else:
+                return(False)
 
         except Exception as e:
             return(True)
 
     #--------------------------------------------------------------------------
     #
-    # Creates a string of xml output as a one item per line hierarchy.
-    # Similar to long_listing but going to a string instead of printing.
-    # Helpful for XML error markup.
-    #
-    def get_all_text(self, element, inputString):
-
-        # add the name of the element
-        outputString = inputString
-
-        # add the text of the element; "None" if no text
-        # if the tag is a line, then just print out the line.
-        if element.text:
-            if element.tag != "line":
-                outputString = outputString + element.tag + ": " + element.text.rstrip()
-            else:
-                outputString = outputString + element.text.rstrip()
-        else:
-            if element.tag != "line":
-                outputString = outputString + element.tag + ": None"
-            else:
-                outputString =  outputString + ": None"
-        outputString = outputString + "\n"
-
-        # recurse to the next level of elements
-        for subelem in element:
-            outputString = self.get_all_text(subelem, outputString)
-
-        return(outputString)
-
-
-    #--------------------------------------------------------------------------
-    #
     def clear_cookie(self):
         try:
-            tmpserver = self.server
-            if tmpserver.find(".") == -1:
-                tmpserver = tmpserver + ".local"
-            for cookie in self.session.cookies:
-                if cookie.domain == tmpserver:
-                    self.session.cookies.clear(cookie.domain)
+            os.umask(0o077)
+            found = False
+
+            # Save all cookies in a list
+            json_list = []
+            if os.path.exists(self.cookiefile):
+                with open(self.cookiefile, 'r') as cookiefile:
+                    for line in cookiefile:
+                        # Do not add the cookie in question to our list
+                        if json_obj['server'] != self.server:
+                            json_obj = json.loads(line)
+                            json_list.append(json_obj)
+
+            # Save all cookies to file
+            with open(self.cookiefile, 'w') as cookiefile:
+                for json_obj in json_list:
+                    json.dump(json_obj, cookiefile)
+
         except Exception as e:
             self.loggedin       = False
-            self.sessionid      = ""
             self.token          = ""
             self.tokenexpiresat = -1
             self.refreshuntil   = -1
-
 
     #--------------------------------------------------------------------------
     #
     def load_cookie(self):
 
         try:
-            tmpserver = self.server
-            if tmpserver.find(".") == -1:
-                tmpserver = tmpserver + ".local"
-            lwp_cookiejar = http.cookiejar.LWPCookieJar()
-            lwp_cookiejar.load(self.cookiefile, ignore_discard=True, ignore_expires=False)
-
-            for cookie in lwp_cookiejar:
-                if cookie.domain == tmpserver and cookie.name == "Authorization":
-                    match = re.search("\"Bearer\s+(.*?)\"", cookie.value)
-                    self.token = match.group(1)
-                    self.loggedin = True
+            with open(self.cookiefile, 'r') as cookiefile:
+                for line in cookiefile:
+                    json_obj = json.loads(line)
+                    if json_obj['server'] == self.server:
+                        # Found it we will load the cookie
+                        self.token = json_obj['token']
+                        self.tokenexpiresat = json_obj['token_expires_at']
+                        self.refreshuntil = json_obj['refresh_until']
+                        break
 
         except Exception as e:
             self.save_cookies()
             self.loggedin       = False
-            self.sessionid      = ""
             self.token          = ""
             self.tokenexpiresat = -1
             self.refreshuntil   = -1
@@ -233,252 +214,155 @@ class SpectraLogicAPI:
     #--------------------------------------------------------------------------
     #
     def save_cookies(self):
+
         try:
+
             os.umask(0o077)
-            lwp_cookiejar = http.cookiejar.LWPCookieJar()
-            for cookie in self.session.cookies:
-                lwp_cookiejar.set_cookie(cookie)
-            lwp_cookiejar.save(self.cookiefile, ignore_discard=True, ignore_expires=False)
+            found = False
+
+            # Save all cookies in a list
+            json_list = []
+            if os.path.exists(self.cookiefile):
+                with open(self.cookiefile, 'r') as cookiefile:
+                    for line in cookiefile:
+                        json_obj = json.loads(line)
+                        json_list.append(json_obj)
+
+            # Overwrite cookie for server in question
+            for json_obj in json_list:
+                if json_obj['server'] == self.server:
+                    json_obj['token'] = self.token
+                    json_obj['token_expires_at'] = self.tokenexpiresat
+                    json_obj['refresh_until'] = self.refreshuntil
+                    found = True
+
+            if not found:
+                json_obj = self.token_to_json()
+                json_list.append(json_obj)
+
+            # Save all cookies to file
+            with open(self.cookiefile, 'w') as cookiefile:
+                for json_obj in json_list:
+                    json.dump(json_obj, cookiefile)
+
         except Exception as e:
+            print(f"{e}")
             os.umask(0o077)
             self.loggedin       = False
-            self.sessionid      = ""
             self.token          = ""
             self.tokenexpiresat = -1
             self.refreshuntil   = -1
 
-
     #--------------------------------------------------------------------------
     #
-    # Prints xml output as a one item per line hierarchy. Similar to XML output,
-    # but without all the XML markup.
-    #
-    def long_listing(self, element, level):
-
-        # add two spaces for each level
-        for i in range(level):
-            print("  ", end='')
-
-        # print the name of the element
-        print(element.tag, end='')
-
-        # print the text of the element; "None" if no text
-        if element.text:
-            print(": " + element.text.rstrip())
-        else:
-            print(": None")
-
-        # recurse to the next level of elements
-        for subelem in element:
-            self.long_listing(subelem, (level+1))
-
-        sys.stdout.flush()
-
-
-    #--------------------------------------------------------------------------
-    #
-    # This routine pretty prints the XML document to stderr if the verbose
-    # flag is on.
+    # This routine pretty prints the JSON document
     #
     def print_json_document(self, jsonstr):
 
-        if self.verbose:
-            print("--------------------------------------------------", file=sys.stderr)
-            print("JSON Object:", file=sys.stderr)
-            jsonobj = json.loads(jsonstr)
-            json_pretty_str = json.dumps(jsonobj, indent=2)
-            json_lines = json_pretty_str.splitlines()
-            for line in json_lines:
-                line = line.rstrip()
-                if line != "":
-                    print(line, file=sys.stderr)
-            print("--------------------------------------------------", file=sys.stderr)
-            print("", file=sys.stderr)
-
+        jsonobj = json.loads(jsonstr)
+        json_pretty_str = json.dumps(jsonobj, indent=2)
+        json_lines = json_pretty_str.splitlines()
+        for line in json_lines:
+            line = line.rstrip()
+            if line != "":
+                print(line)
 
     #--------------------------------------------------------------------------
     #
-    # Runs the REST API command
-	# Return either JSON object by default, or the data as a string if
-	# the returnstring parameter is set to True.
     #
-    def run_command(self, url, params=None, post=False, returnstring=False):
+    def slapi_print(self, dataframe):
 
-        try:
-
-            if self.verbose:
-                tmpurl = url.replace(self.passwd, "*" * len(self.passwd))
-                print("--------------------------------------------------", file=sys.stderr)
-                print("Command: " + tmpurl, file=sys.stderr)
-                print("--------------------------------------------------", file=sys.stderr)
-                print("", file=sys.stderr)
-
-            try:
-
-                headers   = { "Content-Type": "application/json", "Authorization": f"Bearer {self.token}" }
-
-                if post:
-                    response  = self.session.post(url, json=params, headers=headers, verify=False, allow_redirects=True)
-                else:
-                    response  = self.session.get(url, headers=headers, verify=False, allow_redirects=True)
-                jsonstr   = response.text
-            except Exception as e:
-                raise(e)
-
-            # If we got an error from running the command, then we will be able
-            # to successfully put into a tree and check for error records.
-            checkerror = True
-            if returnstring:
-                checkerror = False
-
-            try:
-                jsonobj    = json.loads(jsonstr)
-                checkerror = True
-
-                # Pretty print the XML document if verbose on
-                self.print_json_document(jsonstr)
-
-            except Exception as e:
-
-                if returnstring:
-                    # It's okay if we couldn't turn the xmldoc into a tree; means
-                    # we've got some good binary data
-                    checkerror = False
-                else:
-                    raise(e)
-
-            # check_for_error will raise an exception if it encounters a problem
-            try:
-                if checkerror:
-                    self.check_for_error(jsonobj)
-
-                if returnstring:
-                    return(jsonstr)
-                else:
-                    return(jsonobj)
-
-            except SpectraLogicLoginError as e:
-                try:
-                    if (self.verbose):
-                        print("Loginerror: Raised: " +
-                            str(SpectraLogicLoginError.LoginErrorRaised),
-                            file=sys.stderr)
-
-                    # If we haven't already had a login error, then login
-                    # and retry the command
-                    if SpectraLogicLoginError.LoginErrorRaised == False:
-                        SpectraLogicLoginError.LoginErrorRaised = True
-                        if (self.verbose):
-                            print("Re-issuing login", file=sys.stderr)
-                        self.login()
-                        if (self.verbose):
-                            print("Re-running command", file=sys.stderr)
-                            return(self.run_command(url, params=params, post=post, returnstring=returnstring))
-                    else:
-                        raise(e)
-                except Exception as e:
-                    raise(e)
-            except Exception as e:
-                raise(e)
-
-        except ConnectionRefusedError as e:
-            print("Connection refused: " + str(e), file=sys.stderr)
-            sys.exit(1)
-        except urllib.error.URLError as e:
-            if str(e.reason) == str('[Errno 111] Connection refused'):
-                print("URL Error: " + str(e), file=sys.stderr)
-                sys.exit(1)
-            raise(e)
-        except Exception as e:
-            raise(e)
+        if self.json:
+            if dataframe is not None:
+                self.print_json_document(dataframe.to_json(orient='records'))
+        else:
+            if dataframe is None:
+                print()
+                return
+            print(dataframe.to_markdown(index=False, tablefmt='simple'))
 
     #==========================================================================
     # DEFINE COMMAND FUNCTIONS
     #==========================================================================
 
+    def drivesummary(self):
 
-    #--------------------------------------------------------------------------
-    #
-    # Checks for system error ("error" record) or syntax error ("syntaxError"
-    # record) and raises an exception if it found any; otherwise it returns
-    # false. The exception will contain the system/syntax error message.
-    #
-    # Raises the following exceptions:
-    # - Exception: system/syntax error
-    # - SpectraLogicLoginError: no active session found
-    #
-    def check_for_error(self, jsonobj):
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
 
-        try:
-            # If there aren't any records, then no errors
-            if len(jsonobj) == 0:
-                return(False)
-
-            # Check for system error
-            if "error" in jsonobj:
-                errstr = ""
-                if self.loggedin == False:
-                    raise(SpectraLogicLoginError("Error: No active session found."))
-                if "message" in jsonobj["error"]:
-                    errstr = jsonobj["error"]["message"]
-                raise(Exception(errstr))
-
-        except SpectraLogicLoginError as e:
-            raise(e)
-
-        except Exception as e:
-            if (self.verbose):
-                print("check_for_error Error: " + str(e), file=sys.stderr)
-                traceback.print_exc()
-            raise(e)
-
-        return(False)
+            # Get the inventory from the library
+            api_response = api_instance.get_drives_summary()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            self.slapi_print(dataframe)
 
     def frus(self):
 
-        try:
-            # FIXME for now force a login
-            self.login()
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
 
-            url     = self.baseurl + "/frus"
-            params = dict()
-            jsonobj = self.run_command(url, params=params, post=False)
+            # Get Metadata for FRUs in the library
+            api_response = api_instance.get_frus()
 
-            for key in jsonobj:
-                fruobjs = jsonobj["value"]
-                for fruobj in fruobjs:
-                    frustatus = None
-                    if "name" in fruobj:
-                        url = self.baseurl + f"/frus/{fruobj['name']}/status"
-                        params = dict()
-                        frustatus = self.run_command(url, params=params, post=False)
-                    self.print_fru_status(fruobj, frustatus)
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe.pop('actions.count')
+            dataframe.pop('actions.value')
 
-        except Exception as e:
-            raise(e)
+            fru_type = None
+            dataframe_fru = None
+            for index, fru in dataframe.iterrows():
+                api_response = api_instance.get_fru_status(fru['name'])
+                json_doc_fru = api_response.to_json()
+                tmp_dataframe_fru = pandas.json_normalize(json.loads(json_doc_fru))
+
+                if fru['type'] != fru_type:
+                    if fru_type != None:
+                        self.slapi_print(dataframe_fru)
+                        self.slapi_print(None)
+                    dataframe_fru = tmp_dataframe_fru
+                    printheader = True
+                    fru_type = fru['type']
+                else:
+                    dataframe_fru.loc[len(dataframe_fru)] = json.loads(json_doc_fru)
+
+            # Print the final one
+            self.slapi_print(dataframe_fru)
 
     def inventory(self):
 
-        try:
-            # FIXME for now force a login
-            self.login()
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
 
-            url    = self.baseurl + "/inventory"
-            params = dict()
-            jsonobj = self.run_command(url, params=params, post=False)
-
-        except Exception as e:
-            raise(e)
+            # Get the inventory from the library
+            api_response = api_instance.get_inventory()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe = dataframe.sort_values(by=['partition', 'address'])
+            self.slapi_print(dataframe)
 
     def librarystatus(self):
 
-        try:
-            url    = self.baseurl + "/library/status"
-            params = dict()
-            jsonobj = self.run_command(url, params=params, post=False)
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
 
-        except Exception as e:
-            raise(e)
+            # Retrieve Current Library Status
+            api_response = api_instance.get_library_status()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            dataframe = dataframe.explode('doors')
+            dataframe_doors = dataframe.pop('doors')
+            dataframe_doors = dataframe_doors['doors'].apply(pandas.Series)
+            self.slapi_print(dataframe)
+            self.slapi_print(dataframe_doors)
 
     #--------------------------------------------------------------------------
     #
@@ -490,106 +374,208 @@ class SpectraLogicAPI:
     def login(self):
 
         try:
-            url    = self.baseurl + "/auth/login"
-            params = dict()
-            params["domain"] = "NATIVE"
-            params["username"] = self.user
-            params["password"] = self.passwd
-            jsonobj = self.run_command(url, params=params, post=True)
+            # Enter a context with an instance of the API client
+            with lumosapi_client.ApiClient(self.configuration) as api_client:
+                # Create an instance of the API class
+                api_instance = lumosapi_client.TFinityApi(api_client)
+                login_request = lumosapi_client.LoginRequest(domain = "NATIVE",
+                                                             username = self.user,
+                                                             password = self.passwd)
+                # Request Authorization Token (JWT)
+                api_response = api_instance.login(login_request)
 
-            for key in jsonobj:
-                if key.casefold() == "error".casefold():
-                    if jsonobj["error"]["code"] == 401:
-                        print("Login Failed...\n", file=sys.stderr)
-                        self.loggedin       = False
-                        self.sessionid      = ""
-                        self.token          = ""
-                        self.tokenexpiresat = -1
-                        self.refreshuntil   = -1
-                        self.clear_cookie()
-                        self.save_cookies()
-                        break
-                if key.casefold() == "passwordHasExpired".casefold():
-                    if jsonobj[key] == True:
-                        self.loggedin       = False
-                        self.sessionid      = ""
-                        self.token          = ""
-                        self.tokenexpiresat = -1
-                        self.refreshuntil   = -1
-                        self.clear_cookie()
-                        self.save_cookies()
-                        break
-                if key.casefold() == "refreshUntil".casefold():
-                    self.refreshuntil = int(jsonobj[key])
-                    continue
-                if key.casefold() == "token".casefold():
-                    self.token = jsonobj[key]
-                    continue
-                if key.casefold() == "tokenExpiresAt".casefold():
-                    self.tokenexpiresat = int(jsonobj[key])
-                    continue
+                if api_response.password_has_expired:
+                    self.loggedin       = False
+                    self.token          = ""
+                    self.tokenexpiresat = -1
+                    self.refreshuntil   = -1
+                    self.clear_cookie()
+                    self.save_cookies()
 
-            print(self)
+                # The login succeeded
+                self.loggedin = True
+                self.refreshuntil = api_response.refresh_until
+                self.token = api_response.token
+                self.tokenexpiresat = api_response.token_expires_at
+                self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}",
+                                                                   access_token=self.token)
+                self.configuration.verify_ssl = False
+                self.configuration.client_side_validation = False
+
+                self.save_cookies()
+                
+        except lumosapi_client.exceptions.UnauthorizedException as e:
+            if self.debug:
+                print("Login Failed...", file=sys.stderr)
+            self.loggedin       = False
+            self.token          = ""
+            self.tokenexpiresat = -1
+            self.refreshuntil   = -1
+            self.clear_cookie()
             self.save_cookies()
-
+            if self.first_try:
+                self.first_try = False
+                self.login()
         except Exception as e:
-            raise(e)
+            if self.debug:
+                print(f"Exception when calling TFinityApi->login ({type(e).__name__} {e})", file=sys.stderr)
+            self.loggedin       = False
+            self.token          = ""
+            self.tokenexpiresat = -1
+            self.refreshuntil   = -1
+            self.clear_cookie()
+            self.save_cookies()
+            if self.first_try:
+                self.first_try = False
+                self.login()
+
+    def robotservice(self, robot, action):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            if robot == "1":
+                robot = "Robot:1"
+            elif robot == "2":
+                robot = "Robot:2"
+            else:
+                raise(Exception("Error: Invalid robotservice robot number"))
+
+            if action.lower() == "beginservice":
+                action = "BEGIN_SERVICE"
+            elif action.lower() == "endservice":
+                action = "END_SERVICE"
+            else:
+                raise(Exception("Error: Invalid robotservice robot action"))
+
+            # Get the inventory from the library
+            api_response = api_instance.start_fru_action(robot, action)
+            task_id = api_response.task_id
+
+            i = 1
+            while (1):
+                api_response = api_instance.get_task(task_id)
+                state = api_response.state
+                log = api_response.task_log
+                if state == lumosapi_client.TaskStates.SUCCEEDED:
+                    print(f"Robot move succeeded.")
+                    break
+                elif i >= 100:
+                    raise(Exception("Error: Timed out waiting for robot move to complete"))
+                else:
+                    print(f"{state} {api_response}")
+                i = i+1
+                time.sleep(5)
 
     def spec(self):
 
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get API spec from the library
+            api_response = api_instance.get_api_documentation()
+            pprint(api_response)
+
+    def packagelist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the active package from the library
+            api_response_active = api_instance.get_active_package()
+            json_doc_active = api_response_active.to_json()
+
+            # Get packages from the library
+            api_response = api_instance.get_packages()
+            json_doc = api_response.to_json()
+
+            dataframe_active = pandas.json_normalize(json.loads(json_doc_active), record_path='firmware', meta=['name', 'version', 'created'], record_prefix='firmware.')
+            dataframe_packages = pandas.json_normalize(json.loads(json_doc), record_path='value')
+
+            dataframe = dataframe_packages.explode('firmware')
+            dataframe_firmware = dataframe['firmware'].apply(pandas.Series)
+            # We need to add a prefix for the firmware to ensure that the
+            # keys in the dictionary are unique
+            dataframe_firmware = dataframe_firmware.add_prefix('firmware.')
+            dataframe = pandas.concat([dataframe.drop(['firmware'], axis=1), dataframe_firmware], axis=1)
+            self.slapi_print(dataframe)
+            self.slapi_print(None)
+
+            # We need to add a prefix for the firmware to ensure that the
+            # keys in the dictionary are unique
+            firmware_name_column = dataframe_active.pop('firmware.name')
+            firmware_version_column = dataframe_active.pop('firmware.version')
+            dataframe_active['firmware.name'] = firmware_name_column
+            dataframe_active['firmware.version'] = firmware_version_column
+            dataframe_active = dataframe_active.add_prefix('active.')
+            self.slapi_print(dataframe_active)
+
+    def packagedelete(self, package_file):
+
         try:
-            # FIXME for now force a login
-            self.login()
+            # Enter a context with an instance of the API client
+            with lumosapi_client.ApiClient(self.configuration) as api_client:
+                # Create an instance of the API class
+                api_instance = lumosapi_client.TFinityApi(api_client)
 
-            url    = self.baseurl + "/spec"
-            params = dict()
-            yamlstr = self.run_command(url, params=params, post=False, returnstring=True)
+                # Remove package from the library
+                api_response = api_instance.delete_package(package_file)
+                # If we got here assume the package was deleted successfully
+                print(f"Package {package_file} successfully deleted from library.")
 
-            print(f"{yamlstr}")
+        except lumosapi_client.exceptions.NotFoundException as e:
+            print(f"Package {package_file} is not stored on the library.")
+            sys.exit(1)
 
-        except Exception as e:
-            raise(e)
+    def packageupdate(self, package_file):
 
-    def print_fru_status(self, fruobj, frustatus):
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+            package_update_request = lumosapi_client.PackageUpdateRequest(name=package_file)
 
-        for key in fruobj:
-            if key.casefold() == "actions".casefold():
-                next
-            if key.casefold() == "type".casefold():
-                if fruobj["type"].casefold() == "CAN_OVER_POWER".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "DRIVE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "EXPORT_CONTROL_MODULE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "FRAME_CONTROL_MODULE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "FRAME_MANAGEMENT_MODULE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "LS".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "NETWORK_SWITCH".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "POWER_CONTROL_MODULE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "POWER_SUPPLY".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "ROBOT".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "SERVICE_CONTROL_MODULE".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "PMM".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "FMM".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "FCM".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "CAN_REPEATER".casefold():
-                    pass
-                elif fruobj["type"].casefold() == "ROBOTICS_INTERFACE_MODULE".casefold():
-                    pass
-            print(f"Key: {key} Value: {fruobj[key]}")
-        print("")
+            # Upload package file to the library
+            api_response = api_instance.start_library_update(package_update_request)
+            pprint(api_response)
+
+    def packageupdatestatus(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Upload package file to the library
+            api_response = api_instance.get_package_update_state()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            print(dataframe.to_string(index=False))
+            print("")
+            pprint(api_response)
+
+    def packageupload(self, package_file, pubkey_file):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Upload package file to the library
+            api_response = api_instance.upload_package(package_file=package_file, pubkey_file=pubkey_file)
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='firmware', meta=['name', 'version', 'created'], record_prefix='firmware.')
+            firmware_name_column = dataframe.pop('firmware.name')
+            firmware_version_column = dataframe.pop('firmware.version')
+            dataframe['firmware.name'] = firmware_name_column
+            dataframe['firmware.version'] = firmware_version_column
+            self.slapi_print(dataframe)
 
     #--------------------------------------------------------------------------
     #
@@ -605,7 +591,6 @@ class SpectraLogicAPI:
             print("Logout Error: " + str(e), file=sys.stderr)
 
         self.loggedin       = False
-        self.sessionid      = ""
         self.token          = ""
         self.tokenexpiresat = -1
         self.refreshuntil   = -1
@@ -782,8 +767,11 @@ def main():
 
     cmdparser.add_argument('--version', '-V', action='version', version='%(prog)s @VERSION@')
 
-    cmdparser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
-                           help='Increase the verbosity for the output.')
+    cmdparser.add_argument('--json', '-j', dest='json', action='store_true',
+                           help='Print out everything in JSON.')
+
+    cmdparser.add_argument('--debug', '-d', dest='debug', action='store_true',
+                           help='Add debugging output.')
 
     cmdparser.add_argument('--longlist', '-l', dest='longlist', action='store_true',
                            help='Format the output as a long listing; one     \
@@ -817,6 +805,9 @@ def main():
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
 
+    frus_parser = cmdsubparsers.add_parser('drivesummary',
+        help='Get a summary of drives.')
+
     frus_parser = cmdsubparsers.add_parser('frus',
         help='Retrieve a list of hardware field replaceable units currently in the library.')
 
@@ -831,6 +822,51 @@ def main():
 
     spec_parser = cmdsubparsers.add_parser('spec',
         help='Get the newest REST API spec.')
+
+    package_parser = cmdsubparsers.add_parser('package',
+        help='package command help.')
+    package_subparser = package_parser.add_subparsers(title="subcommands", dest="subcommand")
+
+    package_delete_parser = package_subparser.add_parser('delete',
+        help='Delete a software package from the library.')
+    package_delete_parser.add_argument('package_file', action='store',
+        help='Software package file to delete.')
+
+    package_list_parser = package_subparser.add_parser('list',
+        help='List software packages sotred on the library.')
+
+    package_update_parser = package_subparser.add_parser('update',
+        help='Update library to new software package.')
+    package_update_parser.add_argument('package_file', action='store',
+        help='Software package file to update library to.')
+
+    package_updatestatus_parser = package_subparser.add_parser('updatestatus',
+        help='Get software update status from the library.')
+
+    package_upload_parser = package_subparser.add_parser('upload',
+        help='Upload a new software package to the library.')
+    package_upload_parser.add_argument('package_file', action='store',
+        help='Path to software package file to upload.')
+    package_upload_parser.add_argument('pubkey_file', action='store',
+        help='Path to software package verification file to upload.')
+
+    robotservice_parser = cmdsubparsers.add_parser('robotservice',
+        help='Send robot to/from service bay.')
+    robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand")
+    robotservice_beginservice_parser = robotservice_subparser.add_parser('beginservice', help='Move robot to the service bay')
+    robotservice_beginservice_parser.add_argument('robot',
+        action='store',
+        type=str.lower,
+        default=None,
+        choices=['1', '2'],
+        help='Left robot (1) or right robot (2) when facing the front of the library.')
+    robotservice_endservice_parser = robotservice_subparser.add_parser('endservice', help='Move robot out of service bay')
+    robotservice_endservice_parser.add_argument('robot',
+        action='store',
+        type=str.lower,
+        default=None,
+        choices=['1', '2'],
+        help='Left robot (1) or right robot (2) when facing the front of the library.')
 
     args = cmdparser.parse_args()
     if args.passwd_prompt:
@@ -865,9 +901,12 @@ def main():
             if args.insecure is None or args.insecure == False:
                 if config.get("insecure"):
                     args.insecure = config.getboolean("insecure")
-            if args.verbose is None or args.verbose == False:
-                if config.get("verbose"):
-                    args.verbose = config.getboolean("verbose")
+            if args.json is None or args.json == False:
+                if config.get("json"):
+                    args.json = config.getboolean("json")
+            if args.debug is None or args.debug == False:
+                if config.get("debug"):
+                    args.debug = config.getboolean("debug")
             if args.port is None:
                 if config.get("port"):
                     args.port    = config.getint("port")
@@ -890,29 +929,63 @@ def main():
 
     slapi = SpectraLogicAPI(args)
 
-    try:
-        if args.command is None:
-            cmdparser.print_help()
-            sys.exit(1)
-        elif args.command == "frus":
-            slapi.frus()
-        elif args.command == "inventory":
-            slapi.inventory()
-        elif args.command == "librarystatus":
-            slapi.librarystatus()
-        elif args.command == "login":
+    while slapi.first_try == True:
+        try:
+            if args.command is None:
+                cmdparser.print_help()
+                sys.exit(1)
+            elif args.command == "drivesummary":
+                slapi.drivesummary()
+            elif args.command == "frus":
+                slapi.frus()
+            elif args.command == "inventory":
+                slapi.inventory()
+            elif args.command == "librarystatus":
+                slapi.librarystatus()
+            elif args.command == "login":
+                slapi.login()
+            elif args.command == "spec":
+                slapi.spec()
+            elif args.command == "package":
+                if args.subcommand is None or args.subcommand == "list":
+                    slapi.packagelist()
+                elif args.subcommand == "delete":
+                    slapi.packagedelete(args.package_file)
+                elif args.subcommand == "update":
+                    slapi.packageupdate(args.package_file)
+                elif args.subcommand == "updatestatus":
+                    slapi.packageupdatestatus()
+                elif args.subcommand == "upload":
+                    slapi.packageupload(args.package_file, args.pubkey_file)
+                else:
+                    raise(Exception("package: Unknown option " + args.subcommand))
+            elif args.command == "robotservice":
+                slapi.robotservice(robot=args.robot, action=args.subcommand)
+            else:
+                cmdparser.print_help()
+                sys.exit(1)
+
+        except lumosapi_client.exceptions.UnauthorizedException as e:
+            if slapi.debug:
+                print("Unauthorized...Logging in again...", file=sys.stderr)
             slapi.login()
-        elif args.command == "spec":
-            slapi.spec()
-        else:
-            cmdparser.print_help()
+        except lumosapi_client.exceptions.ConflictException as e:
+            json_doc = json.loads(e.body)
+            print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}")
             sys.exit(1)
-    except Exception as e:
-        fullcommand = args.command
-        if hasattr(args, "subcommand") and args.subcommand is not None:
-            fullcommand = args.command + " " + args.subcommand
-        print("Command '" + fullcommand + "': " + str(e), file=sys.stderr)
-        sys.exit(1)
+        except lumosapi_client.exceptions.UnprocessableEntityException as e:
+            json_doc = json.loads(e.body)
+            print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}")
+            sys.exit(1)
+        except Exception as e:
+            fullcommand = args.command
+            if hasattr(args, "subcommand") and args.subcommand is not None:
+                fullcommand = args.command + " " + args.subcommand
+            print("Command '" + fullcommand + "': " + str(e), file=sys.stderr)
+            print(type(e))
+            sys.exit(1)
+        finally:
+            slapi.first_try = False
 
 if __name__ == "__main__":
     main()

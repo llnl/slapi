@@ -22,7 +22,7 @@ AC_GNU_SOURCE
 
 AC_PROG_MAKE_SET
 
-AM_PATH_PYTHON([3.4])
+AM_PATH_PYTHON([3.11])
 
 ##
 # Epilogue.

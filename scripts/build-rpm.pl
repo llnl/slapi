@@ -31,6 +31,7 @@ my $specfile  = "";
 my $packagename = "";
 my $packageversion = "";
 my $packagerelease = "";
+my $pythonversion = "";
 my $dist = "";
 my $scmtype = "";
 my $scmurl = "";
@@ -48,6 +49,7 @@ sub parse_args
                "n|name=s"     => \$packagename,
                "v|version=s"  => \$packageversion,
                "r|release=s"  => \$packagerelease,
+               "p|pythonversion=s" => \$pythonversion,
                "b|builddir=s" => \$topdir,
                "scmtype=s"    => \$scmtype,
                "scmurl=s"     => \$scmurl,
@@ -103,6 +105,10 @@ sub parse_args
     if (!$packagerelease)
     {
         $packagerelease = `cat RELEASE`; chomp($packagerelease);
+    }
+    if (!$pythonversion)
+    {
+        $pythonversion = `cat PYTHONVERSION`; chomp($pythonversion);
     }
 
     # Ensure that packagename and such are properly set
@@ -184,6 +190,7 @@ sub parse_args
     print("VERSION: $packageversion\n");
     print("RELEASE: $packagerelease\n");
     print("DIST: $dist\n");
+    print("PYTHONVERSION: $pythonversion\n");
 }
 
 sub create_tmp_structure
@@ -404,6 +411,12 @@ sub build_rpm
     if ($target)
     {
         $extra .= "--target \'$target\' ";
+    }
+
+    if ($pythonversion)
+    {
+        $extra .= "--define \'__python3 /usr/bin/python$pythonversion\' ";
+        $extra .= "--define \'python3_pkgversion $pythonversion\' ";
     }
 
     $cmd = "$rpm -bb --define \'_topdir ${topdir}\' ${extra} ${topdir}/SPECS/" . basename($specfile);

@@ -1,3 +1,9 @@
+%global srcname slapi
+%global modulename slapi
+%global __pytest /usr/bin/pytest-%{python3_pkgversion}
+%define _debugsource_template %{nil}
+%global debug_package %{nil}
+
 Name:
 Version:
 Release:
