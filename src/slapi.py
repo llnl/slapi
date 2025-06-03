@@ -57,7 +57,7 @@ class SpectraLogicAPI:
     #--------------------------------------------------------------------------
     #
     def __init__(self, args):
-        self.first_try         = True
+        self.num_tries         = 0
         self.server            = args.server
         self.port              = args.port
         self.user              = args.user
@@ -403,7 +403,7 @@ class SpectraLogicAPI:
                 self.configuration.client_side_validation = False
 
                 self.save_cookies()
-                
+
         except lumosapi_client.exceptions.UnauthorizedException as e:
             if self.debug:
                 print("Login Failed...", file=sys.stderr)
@@ -413,8 +413,8 @@ class SpectraLogicAPI:
             self.refreshuntil   = -1
             self.clear_cookie()
             self.save_cookies()
-            if self.first_try:
-                self.first_try = False
+            if self.num_tries < 1:
+                self.num_tries = self.num_tries + 1
                 self.login()
         except Exception as e:
             if self.debug:
@@ -425,8 +425,8 @@ class SpectraLogicAPI:
             self.refreshuntil   = -1
             self.clear_cookie()
             self.save_cookies()
-            if self.first_try:
-                self.first_try = False
+            if self.num_tries < 1:
+                self.num_tries = self.num_tries + 1
                 self.login()
 
     def robotservice(self, robot, action):
@@ -929,7 +929,7 @@ def main():
 
     slapi = SpectraLogicAPI(args)
 
-    while slapi.first_try == True:
+    while slapi.num_tries <= 1:
         try:
             if args.command is None:
                 cmdparser.print_help()
@@ -965,6 +965,11 @@ def main():
                 cmdparser.print_help()
                 sys.exit(1)
 
+            # In the successful case we want slapi.num_tries to increment twice
+            # Once here and once in the finally clause so that we are done
+            # Note that slapi.login() will also increment slapi.num_tries
+            slapi.num_tries = slapi.num_tries + 1
+
         except lumosapi_client.exceptions.UnauthorizedException as e:
             if slapi.debug:
                 print("Unauthorized...Logging in again...", file=sys.stderr)
@@ -985,7 +990,7 @@ def main():
             print(type(e))
             sys.exit(1)
         finally:
-            slapi.first_try = False
+            slapi.num_tries = slapi.num_tries + 1
 
 if __name__ == "__main__":
     main()
