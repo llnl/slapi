@@ -17,6 +17,8 @@ BuildRequires: python3-rpm-macros
 BuildRequires: python(abi) >= %{python3_version}
 Requires:      python(abi) >= %{python3_version}
 Requires:      python%{python3_version}dist(requests)
+Requires:      python%{python3_version}dist(pandas)
+Requires:      python%{python3_version}dist(lumosapi-client)
 
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
 %define debug_package %{nil}

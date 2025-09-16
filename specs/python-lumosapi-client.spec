@@ -24,6 +24,8 @@ LumOS API Client.}
 
 %package -n python%{python3_pkgversion}-%{srcname}
 Summary:  %{summary}
+Requires: python%{python3_version}dist(pydantic)
+Requires: python%{python3_version}dist(lazy-imports)
 
 %description -n python%{python3_pkgversion}-%{srcname} %_description
 
