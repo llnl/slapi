@@ -36,7 +36,7 @@ umask 002
 %if %{?snapshot:0}%{!?snapshot:1}
 cd src
 sh ./autogen.sh
-%configure
+%configure PYTHON=python%{python3_version}
 make -s
 %endif
 

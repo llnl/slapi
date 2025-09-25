@@ -256,3 +256,47 @@ Index: lumosapi_client/lumosapi_client/models/status_message_list.py
  
      @classmethod
      def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/library_diagnostic.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/library_diagnostic.py
++++ lumosapi_client/lumosapi_client/models/library_diagnostic.py
+@@ -28,6 +28,8 @@ from lumosapi_client.models.task_types i
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class LibraryDiagnostic(BaseModel):
+     """
+     LibraryDiagnostic includes information about the library diagnostic.
+@@ -64,7 +66,7 @@ class LibraryDiagnostic(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/library_diagnostic_list.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/library_diagnostic_list.py
++++ lumosapi_client/lumosapi_client/models/library_diagnostic_list.py
+@@ -23,6 +23,8 @@ from lumosapi_client.models.library_diag
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class LibraryDiagnosticList(BaseModel):
+     """
+     A paginated list of library diagnostics.
+@@ -47,7 +49,7 @@ class LibraryDiagnosticList(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:

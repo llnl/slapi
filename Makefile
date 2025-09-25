@@ -24,7 +24,7 @@ all: $(PACKAGENAME)
 $(PACKAGENAME): .quilt-lumosapi-client
 	cd src && \
 	./autogen.sh && \
-	./configure --prefix=/usr && \
+	./configure --prefix=/usr PYTHON=python$(PYTHONVERSION) && \
 	make -s
 
 .PHONY:
