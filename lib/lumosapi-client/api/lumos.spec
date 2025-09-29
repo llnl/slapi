@@ -324,6 +324,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
+          required: true
       requestBody:
         required: true
         content:
@@ -333,10 +334,6 @@ paths:
               properties:
                 moniker:
                   $ref: '#/components/schemas/BlueScaleEncryptionMoniker'
-                authorization:
-                  description: Password used to authorize this operation. Use Encryption-Authorization header for this field.
-                  $ref: '#/components/schemas/EncryptionAuthorizationPassword'
-                  deprecated: true
               required:
                 - moniker
       responses:
@@ -370,6 +367,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
+          required: true
         - name: Secondary-Encryption-Authorization
           in: header
           description: Additional password used to authorize this operation in multi user mode.
@@ -388,13 +386,6 @@ paths:
                 password:
                   description: Password used to encrypt the key.
                   $ref: '#/components/schemas/BlueScaleEncryptionKeyPassword'
-                authorization:
-                  type: array
-                  minItems: 1
-                  items:
-                    $ref: '#/components/schemas/EncryptionAuthorizationPassword'
-                  description: Passwords used to authorize this operation. Only one password is required in single user mode. Two passwords are required for mutli user mode. Use Encryption-Authorization and Secondary-Encryption-Authorization header for this field.
-                  deprecated: true
               required:
                 - moniker
                 - password
@@ -423,6 +414,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
+          required: true
         - name: Secondary-Encryption-Authorization
           in: header
           description: Additional password used to authorize this operation in multi user mode.
@@ -442,12 +434,6 @@ paths:
                   format: binary
                 password:
                   $ref: '#/components/schemas/BlueScaleEncryptionKeyPassword'
-                authorization:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/EncryptionAuthorizationPassword'
-                  description: Passwords used to authorize this operation. Only one password is required in single user mode. Two passwords are required for multi user mode. Use Encryption-Authorization and Secondary-Encryption-Authorization header for this field.
-                  deprecated: true
               required:
                 - keyFile
                 - password
@@ -484,16 +470,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                authorization:
-                  description: Use Encryption-Authorization header for this field.
-                  $ref: '#/components/schemas/EncryptionAuthorizationPassword'
-                  deprecated: true
+          required: true
       responses:
         '204':
           $ref: '#/components/responses/204'
@@ -513,16 +490,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                authorization:
-                  description: Use Encryption-Authorization header for this field.
-                  $ref: '#/components/schemas/EncryptionAuthorizationPassword'
-                  deprecated: true
+          required: true
       responses:
         '204':
           $ref: '#/components/responses/204'
@@ -1028,15 +996,15 @@ paths:
         '200':
           description: OK
           content:
-              application/json:
-                schema:
-                  type: object
-                  required:
-                    - frameCount
-                  properties:
-                    frameCount:
-                      type: integer
-                      description: The number of frames in the library.
+            application/json:
+              schema:
+                type: object
+                required:
+                  - frameCount
+                properties:
+                  frameCount:
+                    type: integer
+                    description: The number of frames in the library.
         default:
           $ref: '#/components/responses/default'
   /frus:
@@ -1426,7 +1394,7 @@ paths:
   /library/diagnostics/self-test:
     post:
       summary: Start a Library Self Test
-      description: Start a Library Self Test.
+      description: Start a Library Self Test. The TAP must be empty before running this diagnostic.
       operationId: StartLibrarySelfTest
       tags: [ Cube ]
       x-permitted-roles: [ Admin, SuperUser ]
@@ -1490,7 +1458,7 @@ paths:
       description: -|
         This test will verify the operations of the bulk TAP.
       operationId: StartBulkTapDiagnostic
-      tags: [ TFinity ]
+      tags: [ TFinity, Python ]
       x-permitted-roles: [ Admin, SuperUser ]
       requestBody:
         required: true
@@ -1652,92 +1620,6 @@ paths:
                 $ref: '#/components/schemas/License'
         default:
           $ref: '#/components/responses/default'
-  /logs:
-    get:
-      summary: Retrieve Gathered Logs
-      description: Retrieve a list of gathered log sets currently stored on the library. Results are in ascending order, sorted by the start time of the log gather. Log gather requests that have not completed are displayed first and are in ascending order by task start time. This endpoint is now deprecated, use /logs/download instead
-      operationId: GetLogs
-      tags: [ Cube, TFinity, Python ]
-      x-permitted-roles: [ Admin, SuperUser ]
-      deprecated: true
-      parameters:
-        - $ref: '#/components/parameters/offsetParam'
-        - $ref: '#/components/parameters/limitParam'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LogList'
-        default:
-          $ref: '#/components/responses/default'
-    post:
-      summary: Begin Gathering Requested Logs
-      description: Starts bundling logs for the given type or all types. This endpoint is now deprecated, use /logs/download instead
-      operationId: StartLogGather
-      tags: [ Cube, TFinity, Python ]
-      x-permitted-roles: [ Admin, SuperUser ]
-      deprecated: true
-      parameters:
-        - description: Types of Logs to Gather. Available types are returned in the response from `GET /logs/types`.
-            Leaving this query parameter empty results in gathering all log types except dip-e:adt.
-            Gathered logsets are kept for 12 hours and then deleted.
-          name: logType
-          in: query
-          schema:
-            $ref: '#/components/schemas/LogTypes'
-          explode: false
-          examples:
-            CAN:
-              value: [ 'can' ]
-              description: Get CAN logs
-            Motion:
-              value: [ 'motion' ]
-              description: Get Motion logs
-            Dip-e:
-              value: [ 'dip-e' ]
-              description: Get Dip-e logs
-            LogLib:
-              value: [ 'loglib' ]
-              description: Get LogLib logs
-            Lumos:
-              value: [ 'lumos' ]
-              description: Get Lumos logs
-            SQL:
-              value: [ 'mysql' ]
-              description: Get MySQL server logs
-            O/S:
-              value: [ 'os' ]
-              description: Get O/S logs
-            All:
-              value: [ ]
-              description: Get all log types
-            Multiple:
-              value: [ 'can', 'motion', 'loglib' ]
-              description: Get multiple types of logs
-            Subtype:
-              value: [ 'dip-e:adt' ]
-              description: Get Dip-e ADT logs
-        - description: Start Date to Gather Logs.  Defaults to 'now - 24 hours' if not supplied. Start date cannot occur after the current or end date.
-          name: startTime
-          in: query
-          schema:
-            type: string
-            format: date-time
-            example: "2020-12-03T23:59:59Z"
-        - description: End Date to Gather Logs. Defaults to 'now' if not supplied or set in the future. End date cannot occur before the start date.
-          name: endTime
-          in: query
-          schema:
-            type: string
-            format: date-time
-          example: "2020-12-04T23:59:59Z"
-      responses:
-        '202':
-          $ref: '#/components/responses/202'
-        default:
-          $ref: '#/components/responses/default'
   /logs/download:
     get:
       summary: Gather and save library logs
@@ -1826,60 +1708,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: array
-                  items:
-                    type: string
-                example:
-                  can: [ "app", "canA", "canC" ]
-                  dip-e: [ "adt", "app" ]
-                  drive: [ "trace" ]
-                  loglib: [ "app" ]
-                  lumos: [ "app", "config", "messages", "security", "web" ]
-                  motion: [ "app", "config" ]
-                  os: [ "kernel", "system" ]
-        default:
-          $ref: '#/components/responses/default'
-  '/logs/{taskID}':
-    parameters:
-      - $ref: '#/components/parameters/taskID'
-    get:
-      summary: Retrieve a Gathered Logset
-      description: Retrieve a previously Gathered Logset created through `POST /logs`. Created logsets are kept for 12 hours and then deleted. This endpoint is now deprecated, use /logs/download instead.
-      operationId: GetLogsInfo
-      tags: [ Cube, TFinity, Python ]
-      x-permitted-roles: [ Admin, SuperUser ]
-      deprecated: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Log'
-              example:
-                $ref: '#/components/schemas/Log/example'
-        default:
-          $ref: '#/components/responses/default'
-  '/logs/{taskID}/download':
-    parameters:
-      - $ref: '#/components/parameters/taskID'
-    get:
-      operationId: DownloadLogs
-      summary: Download Specified Logset
-      tags: [ Cube, TFinity, Python ]
-      x-permitted-roles: [ Admin, SuperUser ]
-      deprecated: true
-      description: Download logset. Filename format is <LibrarySerialNumber>_<EndTime>.tar.gz. If the library serial number cannot be retrieved, the filename defaults to FFFFFFFF.tar.gz. This endpoint is now deprecated, use /logs/download instead.
-      responses:
-        '200':
-          description: OK
-          content:
-            application/x-gzip:
-              schema:
-                type: string
-                format: binary
+                $ref: '#/components/schemas/LogTypeList'
         default:
           $ref: '#/components/responses/default'
   /magazines:
@@ -1956,7 +1785,8 @@ paths:
     get:
       summary: Retrieve Status Messages
       description: |-
-        Retrieve a list of status messages from the library
+        Retrieve a list of status messages from the library. Note: Both read and unread messages are retained for one 
+        year.
       operationId: GetMessages
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ Operator, Admin, SuperUser ]
@@ -2538,7 +2368,8 @@ paths:
     post:
       summary: Add magazine partition assignment move
       description: |-
-        Add a move to assign a magazine to a partition.
+        Add a move to assign a magazine to a partition. Running this type of move concurrently with any other host or API moves 
+        is not supported, as the results are nondeterministic.
       operationId: StartPartitionAssignMove
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ SuperUser ]
@@ -2580,9 +2411,10 @@ paths:
         default:
           $ref: '#/components/responses/default'
     post:
-      summary: Add magazine free pool assign move
+      summary: Add magazine free pool assignment move
       description: |-
-        Add a move to assign a magazine to the free pool.
+        Add a move to assign a magazine to the free pool. Running this type of move concurrently with other host or API moves
+        is not supported, as the results are nondeterministic.
       operationId: StartFreePoolAssignMove
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ SuperUser ]
@@ -2667,7 +2499,10 @@ paths:
     get:
       summary: Retrieve Available Packages
       description: |-
-        Retrieve a list of update packages on the library.
+        Retrieve a list of update packages on the library. Packages stored on a USB connected to the LS will be included
+        in the list. USB packages will only be included if the package file and public key file are located in the same
+        directory on the USB device. USB packages and public keys file must be located in the root directory of a USB 
+        device to be detected.
       operationId: GetPackages
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ Operator, Admin, SuperUser ]
@@ -2740,7 +2575,9 @@ paths:
         Spectra Logic Technical Support before you can perform package updates.
 
         A package update can take a large amount of time. The library cannot be used until the update completes.
-        Once started, the update can not be canceled.
+        Once started, the update can not be canceled. If updating from a package stored on a USB, it is strongly
+        recommended to use a USB 3.0 device. USB generations prior to 3.0 may add more than an hour to the update 
+        process. Do not remove the USB until the update completes.
       operationId: StartLibraryUpdate
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ Admin, SuperUser ]
@@ -2798,24 +2635,6 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/204'
-        default:
-          $ref: '#/components/responses/default'
-  /packages/state:
-    get:
-      summary: Get Current Update State
-      description: |-
-        Get the state of the current update. This endpoint is now deprecated, use the /tasks endpoint to find the state of the latest package update.
-      operationId: GetPackageUpdateState
-      tags: [ Cube, TFinity, Python ]
-      x-permitted-roles: [ Admin, SuperUser ]
-      deprecated: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PackageState'
         default:
           $ref: '#/components/responses/default'
   /partitions:
@@ -3302,6 +3121,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
+          required: true
         - name: Secondary-Encryption-Authorization
           in: header
           description: Additional authorization required in multi user mode.
@@ -3317,13 +3137,6 @@ paths:
               properties:
                 mode:
                   $ref: "#/components/schemas/EncryptionMode"
-                authorization:
-                  $ref: "#/components/schemas/EncryptionAuthorizationPassword"
-                  description: Authorization required to change encryption settings. An empty password must be used during
-                    initial setup when the encryption authorization passwords have not been initialized. Only one password is required
-                    in single user mode. This field may not be used in conjunction with `MULTI_USER` mode and the `Encryption-Authorization`
-                    header must be used to provide the required passwords.
-                  deprecated: true
                 updatedAuthorizationPasswords:
                   type: array
                   minItems: 1
@@ -3369,6 +3182,7 @@ paths:
           schema:
             $ref: '#/components/schemas/EncryptionAuthorizationPassword'
           example: "password"
+          required: true
         - name: Secondary-Encryption-Authorization
           in: header
           description: Additional authorization required in multi user mode.
@@ -3384,13 +3198,6 @@ paths:
               properties:
                 settings:
                   $ref: "#/components/schemas/BlueScaleEncryptionSettings"
-                authorization:
-                  $ref: "#/components/schemas/EncryptionAuthorizationPassword"
-                  description: Authorization required to change encryption settings. An empty password must be used during
-                    initial setup when the encryption authorization passwords have not been initialized. Only one password is required
-                    in single user mode. This field may not be used in conjunction with `MULTI_USER` mode and the `Encryption-Authorization`
-                    header must be used to provide the required passwords.
-                  deprecated: true
               required:
                 - settings
       responses:
@@ -3667,7 +3474,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SyslogSettings'
+                $ref: '#/components/schemas/SyslogSettingsResponse'
         default:
           $ref: '#/components/responses/default'
     put:
@@ -3692,8 +3499,13 @@ paths:
     put:
       summary: Upload Certificate and Key File
       description: |-
-        Upload a certificate and key file to use for the library TLS configuration. This action
-        restarts the web server, which aborts active requests and briefly causes the library to reject new requests.
+        Upload an X.509 TLS certificate & key pair to use for the LumOS web server.
+        The certificate and key files must be PEM-encoded, and the key file must be unencrypted.
+        If desired, the certificate file may include multiple certificates, such as if the server certificate
+        is signed by an intermediate CA; in either case, the key file must only contain the key for the server certificate.
+        The new certificate will take effect immediately for new incoming connections; existing clients
+        will not be disconnected. If this represents a security risk (e.g. the old certificate has been compromised),
+        restarting the library is recommended.
       operationId: UploadCertificate
       tags: [ Cube, TFinity, Python ]
       x-permitted-roles: [ SuperUser ]
@@ -3712,6 +3524,41 @@ paths:
               required:
                 - key
                 - cert
+      responses:
+        '204':
+          $ref: '#/components/responses/204'
+        default:
+          $ref: '#/components/responses/default'
+  /settings/environment:
+    get:
+      summary: Get Environment Settings
+      description: |-
+        Retrieve the current values of the environment settings. The environment settings are used for LumOS environment monitoring systems
+      operationId: GetEnvironmentSettings
+      tags: [ Cube, TFinity, Python ]
+      x-permitted-roles: [ Operator, Admin, SuperUser ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentSettings'
+        default:
+          $ref: '#/components/responses/default'
+    patch:
+      summary: Update Environment Settings
+      description: |-
+        Update the values of the environment settings. The environment settings are used for LumOS environment monitoring systems
+      operationId: UpdateEnvironmentSettings
+      tags: [ Cube, TFinity, Python ]
+      x-permitted-roles: [ Admin, SuperUser ]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEnvironmentSettingsRequest'
+        required: true
       responses:
         '204':
           $ref: '#/components/responses/204'
@@ -4163,7 +4010,7 @@ paths:
           $ref: '#/components/responses/default'
   /taps/{name}/close:
     put:
-      summary: Close a TAP door in a TFinity library
+      summary: Close a TAP door on a library
       description: |-
         Close a TAP door
       operationId: CloseTAP
@@ -4548,11 +4395,11 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     '429':
       description: |-
-          Too Many Requests - Rate limit exceeded.
+        Too Many Requests - Rate limit exceeded.
       content:
         application/json:
           schema:
-              $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorResponse'
     '500':
       description: |-
         Permanent Error - See ErrorResponse for details
@@ -5315,6 +5162,7 @@ components:
       required:
         - drivePath
         - location
+        - physicalLocation
         - mediaType
         - name
         - exporting
@@ -5333,14 +5181,16 @@ components:
           maximum: 65535
         drivePath:
           description: |-
-            Location/path of a drive in the format frame:dba:chamber:slot. Each element can also be found as a field in the `location` property. Slot will be omitted for full-height drives.
+            Logical location/path of a drive in the format frame:dba:chamber:slot. Each element can also be found as a field in the `location` property. Slot will be omitted for full-height drives.
             Example: A half-height drive in the top slot of the third chamber of the first drive bay assembly of the first frame has a drivePath of `1:1:3:A`.
             A full-height drive in the first chamber of the second drive bay assembly of the third frame has a drivePath of `1:2:3`.
           type: string
         physicalDrive:
           $ref: '#/components/schemas/PhysicalDrive'
         location:
-          $ref: '#/components/schemas/Location'
+          $ref: '#/components/schemas/LogicalLocation'
+        physicalLocation:
+          $ref: '#/components/schemas/PhysicalLocation'
         mediaType:
           $ref: '#/components/schemas/MediaTypes'
         partition:
@@ -5350,7 +5200,7 @@ components:
           type: string
         name:
           type: string
-          description: Name of drive.
+          description: Name of the drive, based on its logical location/path.
           example: "Drive:1:3:1"
         portConfiguration:
           description: Host side port configuration. May be omitted for non-fibre connected drives.
@@ -5380,6 +5230,10 @@ components:
           frame: 1
           dba: 1
           number: 2
+        physicalLocation:
+          frame: 2
+          dba: 1
+          chamber: 2
         mediaType: "LTO"
         partition: "Data Partition"
         exporting: true
@@ -5429,6 +5283,7 @@ components:
         - type: object
           required:
             - twelveVolt
+            - driveIOEnabled
           properties:
             clockSource:
               $ref: "#/components/schemas/DriveClockSource"
@@ -5474,6 +5329,9 @@ components:
               description: Voltage level of the 12V rail in millivolts
               type: integer
               format: int32
+            driveIOEnabled:
+              description: Indicates if LUN 0 of the specified drive is available for IO. If true, the drive is available for IO operations.
+              type: boolean
     DriveClockSource:
       title: DriveClockSource
       description: |-
@@ -5693,6 +5551,7 @@ components:
         - $ref: "#/components/schemas/EventLibraryStateUpdate"
         - $ref: "#/components/schemas/EventLibraryServiceInterruption"
         - $ref: "#/components/schemas/EventLibraryDiagnosticUpdate"
+        - $ref: "#/components/schemas/EventTAPDoorStateChanged"
       discriminator:
         propertyName: event
         mapping:
@@ -5710,6 +5569,7 @@ components:
           "Library State Update": "#/components/schemas/EventLibraryStateUpdate"
           "Library Service Interruption": "#/components/schemas/EventLibraryServiceInterruption"
           "Library Diagnostic Update": "#/components/schemas/EventLibraryDiagnosticUpdate"
+          "TAP Door State Changed": "#/components/schemas/EventTAPDoorStateChanged"
       example:
         - event: connected
           data:
@@ -5751,7 +5611,7 @@ components:
               $ref: "#/components/schemas/LibraryInitializationStatus"
     EventFRU:
       title: EventFRU
-      description: An event with a location and FRUType as data
+      description: An event associated with a FRU in the library. The "location" and "type" fields have been deprecated.
       allOf:
         - $ref: "#/components/schemas/EventBase"
         - type: object
@@ -5761,11 +5621,15 @@ components:
             data:
               type: object
               required:
+                - name
                 - location
                 - type
               properties:
+                name:
+                  description: The name of the FRU
+                  type: string
                 location:
-                  $ref: "#/components/schemas/Location"
+                  $ref: "#/components/schemas/LogicalLocation"
                 type:
                   $ref: "#/components/schemas/FRUTypes"
     EventStatusMessage:
@@ -5825,12 +5689,16 @@ components:
               type: object
               required:
                 - partitionName
+                - partitionID
                 - configurationType
               properties:
                 partitionName:
                   type: string
-                  description: The name of the partition affected by the configuration change.
+                  description: The name of the partition affected by the configuration change. For `UPDATE` events, this will be the new partition name.
                   example: "Partition 1"
+                partitionID:
+                  type: integer
+                  description: The ID number of the partition affected by the configuration change.
                 configurationType:
                   $ref: "#/components/schemas/PartitionConfigurationType"
     PartitionConfigurationType:
@@ -5949,6 +5817,27 @@ components:
                   description: The library diagnostic information. Note, some information may be omitted or truncated
                     for brevity.
                   $ref: "#/components/schemas/LibraryDiagnostic"
+    EventTAPDoorStateChanged:
+      title: EventTAPDoorStateChanged - An event
+      description: An event with a TAP door state change as data.
+      allOf:
+        - $ref: "#/components/schemas/EventBase"
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              type: object
+              required:
+                - tapType
+                - opened
+              properties:
+                tapType:
+                  description: The type of TAP door that has changed state. This does not include bulk TAPs.
+                  $ref: "#/components/schemas/TAPTypes"
+                opened:
+                  description: Indicates if the TAP door has been opened or closed. A value of `true` indicates the door has been opened, and `false` indicates the door has been closed.
+                  type: boolean
     LibraryInitializationStatus:
       title: LibraryInitializationStatus - Library Initialization Status
       description: |-
@@ -6027,6 +5916,7 @@ components:
           EXPORT_CONTROL_MODULE: '#/components/schemas/GenericFRU'
           SERVICE_CONTROL_MODULE: '#/components/schemas/GenericFRU'
           CAN_OVER_POWER: '#/components/schemas/GenericFRU'
+          POWERLINE_COMMUNICATION: '#/components/schemas/GenericFRU'
           FRAME_MANAGEMENT_MODULE: '#/components/schemas/GenericFRU'
           FRAME_CONTROL_MODULE: '#/components/schemas/GenericFRU'
           LIBRARY_SERVER: '#/components/schemas/GenericFRU'
@@ -6088,7 +5978,7 @@ components:
           </tr>
           <tr>
           <td>RESET</td>
-          <td>Reset the unit. The RESET action for drives is not supported on Cube type libraries, use the RESET_DRIVE instead. </td>
+          <td>Reset the unit. When sent to a drive it will reset the drive controller and the tape drive. The RESET action for drives is not supported on Cube type libraries, use RESET_DRIVE to reset the tape drive. </td>
           </tr>
         </table>
         <h4>Actions that can be performed only on a Drive:</h4>
@@ -6255,6 +6145,8 @@ components:
       allOf:
         - $ref: '#/components/schemas/FRUBase'
         - type: object
+          required:
+            - physicalLocation
           properties:
             portA:
               description: Current configuration of port A. The port is omitted if it is not configured.
@@ -6266,6 +6158,8 @@ components:
               description: World Wide Name of the RIM
               type: string
               example: "201F0090A5001EB2"
+            physicalLocation:
+              $ref: '#/components/schemas/PhysicalLocation'
       not:
         anyOf:
           - $ref: '#/components/schemas/GenericFRU'
@@ -6297,6 +6191,67 @@ components:
           type: string
           description: The IP address or hostname of the remote syslog server. Connections to the server are made over
             UDP and the default port is 514. Remote servers are not validated for reachability.
+        port:
+          type: integer
+          description: UDP port of the remote syslog server.
+          minimum: 1
+          maximum: 65535
+          default: 514
+    SyslogSettingsResponse:
+      title: Syslog Settings
+      type: object
+      required:
+        - remoteServer
+        - port
+      properties:
+        remoteServer:
+          type: string
+          description: The IP address or hostname of the remote syslog server.
+        port:
+          type: integer
+          description: UDP port of the remote syslog server.
+    UpdateEnvironmentSettingsRequest:
+      title: Environment Settings
+      type: object
+      properties:
+        sendEnvironmentMessages:
+          type: boolean
+          description: |-
+            If true, LumOS will send system messages/emails regarding environment events.
+            By default, this is set to true.
+        repeatEnvironmentErrorMessages:
+          type: boolean
+          description: |-
+            If true, LumOS will repeatedly send system messages/emails when the environment is outside of the allowed range.
+            If false, LumOS will only send system messages/emails when the environment transitions states between recommended, allowed, and not allowed.
+            By default, this is set to true.
+        repeatEnvironmentErrorMessagesDelay:
+          type: integer
+          description: The number of seconds LumOS will wait before sending a repeated
+            system message/email for an "Environment is outside of allowed range" alert. By default, this is set to 3600 seconds (1 hour).
+    EnvironmentSettings:
+      title: Environment Settings
+      type: object
+      required:
+        - sendEnvironmentMessages
+        - repeatEnvironmentErrorMessages
+        - repeatEnvironmentErrorMessagesDelay
+      properties:
+        sendEnvironmentMessages:
+          type: boolean
+          description: |-
+            If true, LumOS will send system messages/emails regarding environment events.
+            By default, this is set to true.
+        repeatEnvironmentErrorMessages:
+          type: boolean
+          description: |-
+            If true, LumOS will repeatedly send system messages/emails when the environment is outside of the allowed range.
+            If false, LumOS will only send system messages/emails when the environment transitions states between recommended, allowed, and not allowed.
+            By default, this is set to true.
+        repeatEnvironmentErrorMessagesDelay:
+          type: integer
+          description: The number of seconds LumOS will wait before sending a repeated
+            system message/email for an "Environment is outside of allowed range" alert. By default, this is set to 3600 seconds (1 hour).
     FRUStatus:
       title: FRUStatus - Field Replaceable Unit Dynamic Information
       description: |-
@@ -6328,6 +6283,7 @@ components:
           EXPORT_CONTROL_MODULE: '#/components/schemas/GenericFRUStatus'
           SERVICE_CONTROL_MODULE: '#/components/schemas/SCMStatus'
           CAN_OVER_POWER: '#/components/schemas/GenericFRUStatus'
+          POWERLINE_COMMUNICATION: '#/components/schemas/GenericFRUStatus'
           FRAME_MANAGEMENT_MODULE: '#/components/schemas/FMMStatus'
           FRAME_CONTROL_MODULE: '#/components/schemas/FCMStatus'
           DRIVE: '#/components/schemas/DriveStatus'
@@ -6369,6 +6325,7 @@ components:
       type: string
       enum:
         - "CAN_OVER_POWER"
+        - "POWERLINE_COMMUNICATION"
         - "DRIVE"
         - "EXPORT_CONTROL_MODULE"
         - "FRAME_CONTROL_MODULE"
@@ -6761,6 +6718,8 @@ components:
             - $ref: '#/components/schemas/SoftwareSupportLicenseFeatures'
             - $ref: '#/components/schemas/EncryptionProLicenseFeatures'
             - $ref: '#/components/schemas/KMIPLicenseFeatures'
+            - $ref: '#/components/schemas/CertifiedMediaRequiredLicenseFeatures'
+            - $ref: '#/components/schemas/TapeDriveEnvironmentalControlLicenseFeatures'
           discriminator:
             propertyName: type
             mapping:
@@ -6769,6 +6728,8 @@ components:
               SOFTWARE_SUPPORT: '#/components/schemas/SoftwareSupportLicenseFeatures'
               ENCRYPTION_PRO: '#/components/schemas/EncryptionProLicenseFeatures'
               KMIP: '#/components/schemas/KMIPLicenseFeatures'
+              CERTIFIED_MEDIA_REQUIRED: '#/components/schemas/CertifiedMediaRequiredLicenseFeatures'
+              TAPE_DRIVE_ENVIRONMENTAL_CONTROL: '#/components/schemas/TapeDriveEnvironmentalControlLicenseFeatures'
       required:
         - key
         - type
@@ -6789,6 +6750,8 @@ components:
         - "SOFTWARE_SUPPORT"
         - "ENCRYPTION_PRO"
         - "KMIP"
+        - "CERTIFIED_MEDIA_REQUIRED"
+        - "TAPE_DRIVE_ENVIRONMENTAL_CONTROL"
     EncryptionAuthorizationPassword:
       description: Password to use for encryption operations.
       type: string
@@ -6943,6 +6906,32 @@ components:
           minimum: 0
       required:
         - chambers
+    CertifiedMediaRequiredLicenseFeatures:
+      title: CertifiedMediaRequiredLicenseFeatures - Features enabled by a CERTIFIED_MEDIA_REQUIRED license
+      description: |-
+        CertifiedMediaRequiredLicenseFeatures contains information about the features enabled by a CERTIFIED_MEDIA_REQUIRED license.
+        Only one CERTIFIED_MEDIA_REQUIRED license can be installed on a library and adding a new CERTIFIED_MEDIA_REQUIRED license will replace the existing license.
+        This license is used to ensure that uncertified media cannot be used in the library.
+      type: object
+      properties:
+        certifiedMediaRequired:
+          description: Indicates if only certified media can be used in the library.
+          type: boolean
+      required:
+        - certifiedMediaRequired
+    TapeDriveEnvironmentalControlLicenseFeatures:
+      title: TapeDriveEnvironmentalControlLicenseFeatures - Features enabled by a TAPE_DRIVE_ENVIRONMENTAL_CONTROL license
+      description: |-
+        TapeDriveEnvironmentalControlLicenseFeatures contains information about the features enabled by a TAPE_DRIVE_ENVIRONMENTAL_CONTROL license.
+        Only one TAPE_DRIVE_ENVIRONMENTAL_CONTROL license can be installed on a library and adding a new TAPE_DRIVE_ENVIRONMENTAL_CONTROL license will replace the existing license.
+        While this license is installed, tape drive reads and writes will be disabled if the library humidity or temperature is outside of the recommended range.
+      type: object
+      properties:
+        driveEnvironmentalControlEnabled:
+          description: Indicates if drives I/O should be disabled when the library humidity or temperature is out of the recommended range.
+          type: boolean
+      required:
+        - driveEnvironmentalControlEnabled
     SoftwareSupportLicenseFeatures:
       title: SoftwareSupportLicenseFeatures - Features enabled by a SOFTWARE_SUPPORT license
       description: |-
@@ -6984,139 +6973,68 @@ components:
           minimum: 0
       required:
         - drives
-    Location:
-      title: Location - Physical Location of a FRU in the Library
-      description: |-
-        The location of a FRU in the library
+    LogicalLocation:
+      title: LogicalLocation - Logical Location of a FRU in the Library
+      description: The logical location of a FRU in the library
+      required:
+        - frame
       properties:
         frame:
-          description: The number of the frame in which the FRU is located.  In a single-frame library this is always 0.
+          description: The logical number of the frame in which the FRU is located.
           type: integer
-          minimum: 0
-          maximum: 255
         dba:
-          description: The number of the DBA within a frame in which the FRU is located
+          description: The number of the Drive Bay Assembly within the frame in which the FRU is located.
           type: integer
-          minimum: 0
-          maximum: 255
         chamber:
-          description: The number of the chamber in the DBA in which the FRU is located
+          description: The number of the chamber in the DBA in which the FRU is located.
           type: integer
-          minimum: 0
-          maximum: 255
         slot:
-          description: The slot of a half height drive in the chamber in the DBA in which the drive is located. A is the top slot, B is the bottom slot.
+          description: The slot of a half height drive in the chamber in which the drive is located. A is the top slot, B is the bottom slot.
           type: string
           enum:
             - "A"
             - "B"
-    Log:
-      title: Log - MetaData about a gathered logset
-      description: |-
-        Metadata relating to a gathered logset
-      allOf:
-        - $ref: '#/components/schemas/Task'
-        - type: object
-          properties:
-            parameters:
-              $ref: '#/components/schemas/LogInfo'
-      example:
-        taskID: "44b23ff3-470e-4ee3-adf2-8a4830013707"
-        state: "RUNNING"
-        class: "BASIC"
-        type: "LOG_GATHER"
-        updated: "2020-12-05T18:32:12Z"
-        percent: 90
-        parameters:
-          startTime: "2020-12-03T00:00:00Z"
-          endTime: "2020-12-03T23:59:59Z"
-          logTypes:
-            can: [ "app", "canA", "canC" ]
-            dip-e: [ "adt", "app" ]
-            drive: [ "trace" ]
-            loglib: [ "loglib" ]
-            lumos: [ "app", "config", "messages", "security", "web" ]
-            motion: [ "app", "config" ]
-            os: [ "kernel", "system" ]
+    PhysicalLocation:
+      title: PhysicalLocation - Physical Location of a FRU in the Library
+      description: The physical location of a FRU in the library
+      required:
+        - frame
+      properties:
+        frame:
+          description: The physical number of the frame in which the FRU is located. Frames are numbered starting from 1 at the left side of the library, facing the front, and continue sequentially.
+          type: integer
+        dba:
+          description: The number of the Drive Bay Assembly within the frame in which the FRU is located.
+          type: integer
+        chamber:
+          description: The number of the chamber in the DBA in which the FRU is located.
+          type: integer
+        slot:
+          description: The slot of a half height drive in the chamber in which the drive is located. A is the top slot, B is the bottom slot.
+          type: string
+          enum:
+            - "A"
+            - "B"
     LogTypes:
       type: array
       items:
         type: string
-    LogInfo:
-      title: LogInfo - Metadata about a Log
-      properties:
-        startTime:
-          description: The requested starting time (RFC3339 format) to collect logs files from, using the LCM timezone. For example `2020-05-11T08:00:00Z`.
+    LogTypeList:
+      description: Log subtypes grouped by log type.
+      type: object
+      additionalProperties:
+        type: array
+        items:
           type: string
-          format: date-time
-        endTime:
-          description: The requested end time (RFC3339 format) to collect logs files up to, using the LCM timezone. For example `2020-07-07T19:00.00Z`.
-          type: string
-          format: date-time
-        logTypes:
-          description: The requested set of log types to collect. A log type corresponds to a component running on the library that produces log messages.
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              type: string
-    LogList:
-      title: LogList - List of Logs
-      description: |-
-        List of gathered logsets.
-      required:
-        - count
-        - value
-      properties:
-        count:
-          type: integer
-          description: The count of items in the list
-        value:
-          type: array
-          description: List of Logs
-          items:
-            $ref: '#/components/schemas/Log'
-        nextLink:
-          type: string
-          description: |-
-            Link to the next page, omitted if this is the last page
       example:
-        count: 2
-        value:
-          - taskID: "44b23ff3-470e-4ee3-adf2-8a4830013707"
-            state: "SUCCEEDED"
-            class: "BASIC"
-            type: "LOG_GATHER"
-            updated: "2020-12-05T18:32:12Z"
-            percent: 100
-            parameters:
-              startTime: '2020-12-03T00:00:00Z'
-              endTime: '2020-12-03T23:59:59Z'
-              logTypes:
-                can: [ "app", "canA", "canC" ]
-                dip-e: [ "adt", "app" ]
-                drive: [ "trace" ]
-                loglib: [ "loglib" ]
-                lumos: [ "app", "config", "messages", "security", "web" ]
-                motion: [ "app", "config" ]
-                os: [ "kernel", "system" ]
-          - taskID: "734630f2-01e6-4d89-8028-a0a6f98d859e"
-            state: "SUCCEEDED"
-            class: "BASIC"
-            type: "LOG_GATHER"
-            updated: "2020-12-05T18:32:12Z"
-            percent: 100
-            parameters:
-              startTime: "2020-12-03T00:00:00Z"
-              endTime: "2020-12-03T23:59:59Z"
-              logTypes:
-                can: [ "app", "canA", "canC" ]
-                dip-e: [ "adt", "app" ]
-                drive: [ "trace" ]
-                loglib: [ "loglib" ]
-                lumos: [ "app", "config", "messages", "security", "web" ]
-                motion: [ "app", "config" ]
-                os: [ "kernel", "system" ]
+        can: [ "app", "canA", "canC" ]
+        dip-e: [ "adt", "app" ]
+        drive: [ "trace" ]
+        loglib: [ "app", "blobs" ]
+        lumos: [ "app", "config", "security", "web", "blobs" ]
+        motion: [ "app", "config" ]
+        os: [ "kernel", "system" ]
+        ftdi: [ "app" ]
     LoginRequest:
       title: LoginRequest - Authentication Request
       description: |-
@@ -7494,6 +7412,8 @@ components:
       properties:
         address:
           $ref: '#/components/schemas/MediaContainerAddress'
+        sourceAddress:
+            $ref: '#/components/schemas/MediaContainerAddress'
         containerType:
           $ref: '#/components/schemas/ContainerTypes'
         mediaBarcode:
@@ -8215,34 +8135,6 @@ components:
             created: "2020-11-30T08:43:53Z"
             version: "0.1.1"
             firmware: [ ]
-    PackageState:
-      title: PackageState - Current Progress of a Package Update
-      description: |-
-        Summary and detailed information about a package update. If an update is in progress, this will show the in-progress state. Otherwise, it will show the final status of the last update.
-        An update comprises several specific subtasks updating different components of the overall system. Which component updaters are run as part of an update to a particular package depends on which files are actually present in the new package.
-      allOf:
-        - $ref: '#/components/schemas/Task'
-        - $ref: '#/components/schemas/PackageUpdateComponents'
-      example:
-        taskID: "95314db8-ff73-11eb-9a03-0242ac130003"
-        updated: '0001-01-01T00:00:00Z'
-        percent: 100
-        state: SUCCESSFUL
-        components:
-          Database Updates:
-            taskID: "9b27a884-ff73-11eb-9a03-0242ac130003"
-            updated: '0001-01-01T00:00:00Z'
-            percent: 100
-            state: SUCCESSFUL
-    PackageUpdateComponents:
-      title: PackageUpdateComponents - Package Update Component States
-      required:
-        - components
-      properties:
-        components:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/Task'
     PackageUpdateRequest:
       title: PackageUpdateRequest - A request to begin a Package Update
       required:
@@ -8251,6 +8143,12 @@ components:
         name:
           description: The unique name of the package to update to
           type: string
+    PartitionName:
+      description: Partition name. This must be unique across all partitions and match the defined pattern.
+      type: string
+      pattern: '^[a-zA-Z0-9@_.-]+(?: [a-zA-Z0-9@_.-]+)*$'
+      minLength: 1
+      maxLength: 32
     Partition:
       title: Partition - Logical Partition Information
       required:
@@ -8277,8 +8175,7 @@ components:
           type: integer
           description: ID number of this partition
         name:
-          type: string
-          description: Name of the partition.
+          $ref: '#/components/schemas/PartitionName'
         mediaType:
           $ref: '#/components/schemas/MediaTypes'
         storageChambers:
@@ -8379,11 +8276,7 @@ components:
         - storageChambers
       properties:
         name:
-          description: Partition name. This must be unique across all partitions and match the defined pattern. The partition name can not be changed after creation.
-          type: string
-          pattern: '^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$'
-          minLength: 1
-          maxLength: 32
+          $ref: '#/components/schemas/PartitionName'
         mediaType:
           $ref: '#/components/schemas/MediaTypes'
         storageChambers:
@@ -8581,11 +8474,7 @@ components:
         - storageChambers
       properties:
         name:
-          description: Partition name. This must be unique across all partitions and match the defined pattern. The partition name can not be changed after creation.
-          type: string
-          pattern: '^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$'
-          minLength: 1
-          maxLength: 32
+          $ref: '#/components/schemas/PartitionName'
         mediaType:
           $ref: '#/components/schemas/MediaTypes'
         storageChambers:
@@ -8596,6 +8485,8 @@ components:
           $ref: '#/components/schemas/BarcodeOptions'
     UpdatePartitionRequest:
       properties:
+        name:
+          $ref: '#/components/schemas/PartitionName'
         storageChambers:
           type: integer
           minimum: 1
@@ -8671,6 +8562,8 @@ components:
           product: P7000
     UpdateCleaningPartitionRequest:
       properties:
+        name:
+          $ref: '#/components/schemas/PartitionName'
         storageChambers:
           type: integer
           minimum: 1
@@ -8706,6 +8599,8 @@ components:
               $ref: '#/components/schemas/RobotSubComponent'
             transporter:
               $ref: '#/components/schemas/RobotSubComponent'
+            powerlineCAN:
+              $ref: '#/components/schemas/RobotSubComponent'
       not:
         anyOf:
           - $ref: '#/components/schemas/GenericFRU'
@@ -8724,7 +8619,7 @@ components:
             - "POSITIONING_TEST"
             - "RESET"
         transporter:
-          firmware: "03.06.08.0"
+          firmware: "3.6.8.0"
           manufacturingInfo:
             manufactureDate: "2019-02-19"
             serialNumber: "2105106"
@@ -8732,7 +8627,7 @@ components:
             topLevelAssemblySerialNumber: "HP21852055"
             topLevelAssemblyEC: 21
         hax:
-          firmware: "08.07.08.0"
+          firmware: "8.7.8.0"
           manufacturingInfo:
             manufactureDate: "2018-03-09"
             serialNumber: "S11897"
@@ -8740,13 +8635,21 @@ components:
             topLevelAssemblySerialNumber: "V3X1807001"
             topLevelAssemblyEC: 8
         vax:
-          firmware: "08.07.08.0"
+          firmware: "8.7.8.0"
           manufacturingInfo:
             manufactureDate: "2018-03-09"
             serialNumber: "S02188"
             ec: 2
             topLevelAssemblySerialNumber: "V3X1807001"
             topLevelAssemblyEC: 8
+        powerlineCAN:
+          firmware: "7.1.0.1"
+          manufacturingInfo:
+            manufactureDate: "2018-03-09"
+            serialNumber: "071812-047"
+            ec: 2
+            topLevelAssemblySerialNumber: "V3X1807001"
+            topLevelAssemblyEC: 14
     RobotSubComponent:
       description: Information about a sub-component of the Robot
       type: object
@@ -9993,17 +9896,12 @@ components:
             - primaryAcPresent
             - secondaryAcPresent
             - pcmPresent
-            - acCurrent
-            - acPrimaryVoltage
-            - acSecondaryVoltage
             - power
             - fiveTwelvePower
             - sampleRate
             - samples
-            - twelveVolt
             - fiveVolt
             - temperature
-            - remoteTemperature
             - supplies
           properties:
             parallelAcPresent:
@@ -10018,18 +9916,6 @@ components:
             pcmPresent:
               description: Indicates if the PCM is present
               type: boolean
-            acCurrent:
-              description: AC Current level in milliamps
-              type: integer
-              format: int32
-            acPrimaryVoltage:
-              description: AC Primary Voltage level in millivolts
-              type: integer
-              format: int32
-            acSecondaryVoltage:
-              description: AC Secondary Voltage level in millivolts
-              type: integer
-              format: int32
             power:
               description: |-
                 Total power draw in Watts over the specified number of samples.
@@ -10050,20 +9936,12 @@ components:
               description: Sample count
               type: integer
               format: int32
-            twelveVolt:
-              description: Twelve volt level in millivolts
-              type: integer
-              format: int32
             fiveVolt:
               description: Five volt level in millivolts
               type: integer
               format: int32
             temperature:
               description: Temperature in degrees Celsius
-              type: integer
-              format: int32
-            remoteTemperature:
-              description: Remote temperature in degrees Celsius
               type: integer
               format: int32
             supplies:
@@ -10077,17 +9955,12 @@ components:
             primaryAcPresent: true
             secondaryAcPresent: true
             pcmPresent: true
-            acCurrent: 6843
-            acPrimaryVoltage: 4598
-            acSecondaryVoltage: 6789
             power: 9874
             fiveTwelvePower: 4203
             sampleRate: 100
             samples: 245
-            twelveVolt: 11874
             fiveVolt: 4890
             temperature: 20
-            remoteTemperature: 25
             supplies:
               - present: true
                 fault: false
@@ -10670,7 +10543,6 @@ components:
         - "DELETE_PARTITION"
         - "DIAGNOSTIC"
         - "FRU_ACTION"
-        - "LOG_GATHER"
         - "PACKAGE_UPDATE"
         - "CREATE_PARTITION"
         - "UPDATE_PARTITION"
@@ -10836,7 +10708,7 @@ components:
                 Send the auto support logset to autosupport@spectralogic.com
             primarySubscriber:
               description: |-
-                The subscriberID of the primary contact for the library. This subscriber's contact information will be 
+                The subscriberID of the primary contact for the library. This subscriber's contact information will be
                 included in emails to Spectra Logic support. Emails to Spectra Logic support will use this subscriber's
                 SMTP address. This field should be omitted if enableAutoSupport is false.
               $ref: '#/components/schemas/SubscriberID'

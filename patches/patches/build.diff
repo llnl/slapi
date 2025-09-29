@@ -145,28 +145,6 @@ Index: lumosapi_client/lumosapi_client/models/library_status.py
  
      @classmethod
      def from_json(cls, json_str: str) -> Optional[Self]:
-Index: lumosapi_client/lumosapi_client/models/package_state.py
-===================================================================
---- lumosapi_client.orig/lumosapi_client/models/package_state.py
-+++ lumosapi_client/lumosapi_client/models/package_state.py
-@@ -28,6 +28,8 @@ from lumosapi_client.models.task_types i
- from typing import Optional, Set
- from typing_extensions import Self
- 
-+from lumosapi_client.models.datetime_encoder import DateTimeEncoder
-+
- class PackageState(BaseModel):
-     """
-     Summary and detailed information about a package update. If an update is in progress, this will show the in-progress state. Otherwise, it will show the final status of the last update. An update comprises several specific subtasks updating different components of the overall system. Which component updaters are run as part of an update to a particular package depends on which files are actually present in the new package.
-@@ -64,7 +66,7 @@ class PackageState(BaseModel):
-     def to_json(self) -> str:
-         """Returns the JSON representation of the model using alias"""
-         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
--        return json.dumps(self.to_dict())
-+        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
- 
-     @classmethod
-     def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/task.py
 ===================================================================
 --- lumosapi_client.orig/lumosapi_client/models/task.py
