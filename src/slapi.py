@@ -511,6 +511,34 @@ class SpectraLogicAPI:
             dataframe = dataframe.rename(columns={'barcode': 'magazineBarcode'})
             self.slapi_print(dataframe)
 
+    def messages(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get messages from the library
+            api_response = api_instance.get_messages()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            
+            # Combining the message and remedy column
+            combine_message_remedy = []
+            for i, log in dataframe.iterrows():
+                # If a remedy is not null and not part of the message already, we want to combine the two columns
+                if isinstance(log['remedy'], str) and not log['remedy'] in log['message']:
+                    combine_message_remedy.append(f"{log['message']} / {log['remedy']}")
+                else:
+                    combine_message_remedy.append(log['message'])
+            
+            dataframe['message/remedy'] = combine_message_remedy
+            
+            dataframe.pop('read')
+            dataframe.pop('message')
+            dataframe.pop('remedy')
+            self.slapi_print(dataframe)
+
     def move(self, partition, source, destination, wait=True):
 
         # For now only allow drive to slot or slot to drive
@@ -1056,6 +1084,9 @@ def main():
     magazines_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve magazines for. If the partition is omitted then all partitions are returned.')
 
+    messages_parser = cmdsubparsers.add_parser('messages',
+        help='Retrieve the library messages.')
+
     move_parser = cmdsubparsers.add_parser('move',
         help='Move tape cartridges around the library.')
 
@@ -1222,6 +1253,8 @@ def main():
                 slapi.login()
             elif args.command == "magazines":
                 slapi.magazines(partition=args.partition)
+            elif args.command == "messages":
+                slapi.messages()
             elif args.command == "move":
                 slapi.move(partition=args.partition, source=args.source, destination=args.destination, wait=args.wait)
             elif args.command == "package":
