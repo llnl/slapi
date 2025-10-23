@@ -245,7 +245,8 @@ class SpectraLogicAPI:
                     json_obj['refresh_until'] = self.refreshuntil
                     found = True
 
-            if not found:
+            # Only add in the new token if it is set
+            if not found and self.token:
                 json_obj = self.token_to_json()
                 json_list.append(json_obj)
 
@@ -253,6 +254,7 @@ class SpectraLogicAPI:
             with open(self.cookiefile, 'w') as cookiefile:
                 for json_obj in json_list:
                     json.dump(json_obj, cookiefile)
+                    print("", file=cookiefile)
 
         except Exception as e:
             print(f"{e}", file=sys.stderr)
@@ -595,7 +597,7 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
-    def robotservice(self, robot, action, wait=True):
+    def robotservice(self, robot=None, action=None, wait=True):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -809,14 +811,18 @@ class SpectraLogicAPI:
             if self.debug:
                 print(f"START_TIME: {start_time}", file=sys.stderr)
 
-            api_response = api_instance.get_tasks(end_time=end_time, limit=100)
+            # Here we retrieve a list of all the tasks and whittle it down
+            # to the tasks started over the past 7 days. The API only provides
+            # us a way to see the completed tasks after a specified time
+            # tasks that started before a specified time.
+            api_response = api_instance.get_tasks()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe.pop('class')
             dataframe.pop('type')
-            dataframe.pop('tags')
             dataframe = dataframe.sort_values(by=['startTime'])
-            self.slapi_print(dataframe)
+            dataframe_current_tasks = dataframe[dataframe['startTime'] >= start_time]
+            self.slapi_print(dataframe_current_tasks)
 
     def taskwait(self, task_id, timeout=None, operation="operation"):
 
@@ -1092,7 +1098,7 @@ def main():
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
 
-    frus_parser = cmdsubparsers.add_parser('drivesummary',
+    drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
     frus_parser = cmdsubparsers.add_parser('frus',
@@ -1170,7 +1176,8 @@ def main():
 
     robotservice_parser = cmdsubparsers.add_parser('robotservice',
         help='Send robot to/from service bay.')
-    robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand")
+    robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand", required=True)
+
     robotservice_beginservice_parser = robotservice_subparser.add_parser('beginservice', help='Move robot to the service bay')
     robotservice_beginservice_parser.add_argument('robot',
         action='store',
