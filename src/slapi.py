@@ -48,6 +48,18 @@ from lumosapi_client.models.fru_list import FRUList
 from lumosapi_client.models.fru_types import FRUTypes
 from lumosapi_client.rest import ApiException
 
+def drivelocation_to_string(drivelocation):
+    if isinstance(drivelocation, dict):
+        mystr = f"{drivelocation['frame']}:{drivelocation['dba']}:{drivelocation['chamber']}"
+        return(f"{mystr}")
+    return str(drivelocation)
+
+def driveport_to_string(driveport):
+    if isinstance(driveport, dict):
+        mystr = f"{driveport['addressMode']}"
+        return(f"{mystr}")
+    return str(driveport)
+
 class SpectraLogicLoginError(Exception):
 
     LoginErrorRaised = False
@@ -296,6 +308,31 @@ class SpectraLogicAPI:
     # DEFINE SHARED COMMAND FUNCTIONS
     #==========================================================================
 
+    def get_partition_dataframe(self, partition=None):
+
+        dataframe_partition = None
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # If the partition is not specifified then get a list of all the
+            # partitions in the library
+            if partition is None:
+                api_response = api_instance.get_partitions()
+
+                for partition_data in api_response:
+                    json_doc = partition_data.to_json()
+                    dataframe = pandas.json_normalize(json.loads(json_doc))
+                    dataframe_partition = pandas.concat([dataframe_partition, dataframe])
+            else:
+                api_response = api_instance.get_partition(partition=partition)
+                json_doc = api_response.to_json()
+                dataframe_partition = pandas.json_normalize(json.loads(json_doc))
+            dataframe_partition = dataframe_partition.sort_values(by=['id'])
+            return(dataframe_partition)
+
     def get_inventoryfull_dataframe(self, partition=None):
 
         # Enter a context with an instance of the API client
@@ -344,6 +381,27 @@ class SpectraLogicAPI:
     #==========================================================================
     # DEFINE COMMAND FUNCTIONS
     #==========================================================================
+
+    def drivelist(self, partition=None):
+
+        dataframe_partition = self.get_partition_dataframe(partition=partition)
+        dataframe_drives = dataframe_partition.pop('drives')
+        dataframe_drives = dataframe_drives.explode('drives').to_frame()
+        dataframe_drives = dataframe_drives['drives'].apply(pandas.Series)
+
+        # convert the physicalDrive into multiple columns
+        dataframe_physicaldrives = pandas.json_normalize(dataframe_drives['physicalDrive'])
+        dataframe_drives = dataframe_drives.drop('physicalDrive', axis=1).join(dataframe_physicaldrives)
+
+        dataframe_drives['location'] = dataframe_drives['location'].apply(drivelocation_to_string)
+        dataframe_drives['physicalLocation'] = dataframe_drives['physicalLocation'].apply(drivelocation_to_string)
+        dataframe_drives['portConfiguration'] = dataframe_drives['portConfiguration'].apply(driveport_to_string)
+
+        dataframe_drives.pop('drivePath')
+        dataframe_drives.pop('location')
+        dataframe_drives.pop('exporting')
+        dataframe_drives.pop('patchLevel')
+        self.slapi_print(dataframe_drives)
 
     def drivesummary(self):
 
@@ -1098,6 +1156,12 @@ def main():
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
 
+    drivelist_parser = cmdsubparsers.add_parser('drivelist',
+        help='Retrieve the drives in the library.')
+
+    drivelist_parser.add_argument('partition', action='store', nargs='?',
+        help='Library partition to retrieve drive information for. If the partition is omitted then all drives are returned.')
+
     drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
@@ -1298,6 +1362,8 @@ def main():
             if args.command is None:
                 cmdparser.print_help()
                 sys.exit(1)
+            elif args.command == "drivelist":
+                slapi.drivelist(partition=args.partition)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
             elif args.command == "frus":
