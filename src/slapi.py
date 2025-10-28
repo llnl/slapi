@@ -620,21 +620,7 @@ class SpectraLogicAPI:
             api_response = api_instance.get_messages()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
-            
-            # Combining the message and remedy column
-            combine_message_remedy = []
-            for i, log in dataframe.iterrows():
-                # If a remedy is not null and not part of the message already, we want to combine the two columns
-                if isinstance(log['remedy'], str) and not log['remedy'] in log['message']:
-                    combine_message_remedy.append(f"{log['message']} / {log['remedy']}")
-                else:
-                    combine_message_remedy.append(log['message'])
-            
-            dataframe['message/remedy'] = combine_message_remedy
-            
             dataframe.pop('read')
-            dataframe.pop('message')
-            dataframe.pop('remedy')
             self.slapi_print(dataframe)
 
     def move(self, partition, sourcebarcode, destination, wait=True):
