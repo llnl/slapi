@@ -18,10 +18,6 @@
 
 import sys
 import os
-# Use the local lumosapi_client if it exists
-if os.path.isdir("lumosapi_client"):
-    sys.path.append("lumosapi_client")
-
 import argparse
 import getpass
 import functools
@@ -37,13 +33,32 @@ import json
 import datetime
 import re
 import pandas
-from pprint import pprint
 import importlib
+from pprint import pprint
+
+# Use the local lumosapi_client if it exists
+slapipath = os.path.abspath(__file__)
+slapidir  = os.path.dirname(slapipath)
+lumospath = f"{slapidir}/lumosapi_client"
+if os.path.isdir(f"{lumospath}"):
+    sys.path.append(f"{lumospath}")
 
 import lumosapi_client
 from lumosapi_client.models.fru_list import FRUList
 from lumosapi_client.models.fru_types import FRUTypes
 from lumosapi_client.rest import ApiException
+
+def drivelocation_to_string(drivelocation):
+    if isinstance(drivelocation, dict):
+        mystr = f"{drivelocation['frame']}:{drivelocation['dba']}:{drivelocation['chamber']}"
+        return(f"{mystr}")
+    return str(drivelocation)
+
+def driveport_to_string(driveport):
+    if isinstance(driveport, dict):
+        mystr = f"{driveport['addressMode']}"
+        return(f"{mystr}")
+    return str(driveport)
 
 class SpectraLogicLoginError(Exception):
 
@@ -133,16 +148,16 @@ class SpectraLogicAPI:
 
         home = os.path.expanduser('~')
         if os.path.exists(home) == False:
-            raise(Exception(home + " does not exist."))
+            raise(Exception(f"{home} does not exist."))
         if os.path.isdir(home) == False:
-            raise(Exception(home + " is not a directory."))
+            raise(Exception(f"{home} is not a directory."))
 
         slapidir = home + "/.slapi"
         if os.path.exists(slapidir):
             if os.path.isdir(slapidir):
                 return(slapidir)
             else:
-                raise(Exception(slapidir + " is not a directory."))
+                raise(Exception(f"{slapidir} is not a directory."))
         else:
             # Directory does not exist
             # Let's try to create it
@@ -242,7 +257,8 @@ class SpectraLogicAPI:
                     json_obj['refresh_until'] = self.refreshuntil
                     found = True
 
-            if not found:
+            # Only add in the new token if it is set
+            if not found and self.token:
                 json_obj = self.token_to_json()
                 json_list.append(json_obj)
 
@@ -250,6 +266,7 @@ class SpectraLogicAPI:
             with open(self.cookiefile, 'w') as cookiefile:
                 for json_obj in json_list:
                     json.dump(json_obj, cookiefile)
+                    print("", file=cookiefile)
 
         except Exception as e:
             print(f"{e}", file=sys.stderr)
@@ -288,8 +305,103 @@ class SpectraLogicAPI:
             print(dataframe.to_markdown(index=False, tablefmt='simple'))
 
     #==========================================================================
+    # DEFINE SHARED COMMAND FUNCTIONS
+    #==========================================================================
+
+    def get_partition_dataframe(self, partition=None):
+
+        dataframe_partition = None
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # If the partition is not specifified then get a list of all the
+            # partitions in the library
+            if partition is None:
+                api_response = api_instance.get_partitions()
+
+                for partition_data in api_response:
+                    json_doc = partition_data.to_json()
+                    dataframe = pandas.json_normalize(json.loads(json_doc))
+                    dataframe_partition = pandas.concat([dataframe_partition, dataframe])
+            else:
+                api_response = api_instance.get_partition(partition=partition)
+                json_doc = api_response.to_json()
+                dataframe_partition = pandas.json_normalize(json.loads(json_doc))
+            dataframe_partition = dataframe_partition.sort_values(by=['id'])
+            return(dataframe_partition)
+
+    def get_inventoryfull_dataframe(self, partition=None):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the inventory from the library
+            api_response = api_instance.get_inventory(partition=partition)
+            json_doc = api_response.to_json()
+            dataframe_inventory = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe_inventory = dataframe_inventory.sort_values(by=['partition', 'address'])
+
+            # Looks like sourceAddress is not always in the output.
+            # When carts begin to move these begin to get filled in, so sometimes
+            # we have to manually add it in.
+            if "sourceAddress" not in dataframe_inventory.columns:
+                address_column_index = dataframe_inventory.columns.get_loc("address")
+                dataframe_inventory.insert(address_column_index+1, "sourceAddress", pandas.Series())
+            else:
+                source_address_column = dataframe_inventory.pop("sourceAddress")
+                address_column_index = dataframe_inventory.columns.get_loc("address")
+                dataframe_inventory.insert(address_column_index+1, "sourceAddress", source_address_column)
+
+            # Retrieve TeraPack Magazine Information
+            api_response = api_instance.get_magazines(partition=partition)
+            json_doc = api_response.to_json()
+            dataframe_magazines = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe_magazines = dataframe_magazines.explode('slots')
+            dataframe_slots = dataframe_magazines['slots'].apply(pandas.Series)
+            dataframe_slots = dataframe_slots.add_prefix('slot.')
+            dataframe_magazines = pandas.concat([dataframe_magazines.drop(['slots'], axis=1), dataframe_slots], axis=1)
+            dataframe_magazines = dataframe_magazines.sort_values(by=['slot.partition', 'slot.address', 'barcode'])
+            dataframe_magazines.pop('state')
+            dataframe_magazines.pop('slot.containerState')
+
+            dataframe = pandas.merge(dataframe_inventory, dataframe_magazines, left_on=['partition', 'address'], right_on=['slot.partition', 'slot.address'], how='outer')
+            dataframe.pop('slot.address')
+            dataframe.pop('slot.containerType')
+            dataframe.pop('slot.mediaType')
+            dataframe.pop('slot.partition')
+            dataframe.pop('slot.mediaBarcode')
+            dataframe = dataframe.rename(columns={'barcode': 'magazineBarcode'})
+            return(dataframe)
+
+    #==========================================================================
     # DEFINE COMMAND FUNCTIONS
     #==========================================================================
+
+    def drivelist(self, partition=None):
+
+        dataframe_partition = self.get_partition_dataframe(partition=partition)
+        dataframe_drives = dataframe_partition.pop('drives')
+        dataframe_drives = dataframe_drives.explode('drives').to_frame()
+        dataframe_drives = dataframe_drives['drives'].apply(pandas.Series)
+
+        # convert the physicalDrive into multiple columns
+        dataframe_physicaldrives = pandas.json_normalize(dataframe_drives['physicalDrive'])
+        dataframe_drives = dataframe_drives.drop('physicalDrive', axis=1).join(dataframe_physicaldrives)
+
+        dataframe_drives['location'] = dataframe_drives['location'].apply(drivelocation_to_string)
+        dataframe_drives['physicalLocation'] = dataframe_drives['physicalLocation'].apply(drivelocation_to_string)
+        dataframe_drives['portConfiguration'] = dataframe_drives['portConfiguration'].apply(driveport_to_string)
+
+        dataframe_drives.pop('drivePath')
+        dataframe_drives.pop('location')
+        dataframe_drives.pop('exporting')
+        dataframe_drives.pop('patchLevel')
+        self.slapi_print(dataframe_drives)
 
     def drivesummary(self):
 
@@ -354,42 +466,24 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe = dataframe.sort_values(by=['partition', 'address'])
+
+            # Looks like sourceAddress is not always in the output.
+            # When carts begin to move these begin to get filled in, so sometimes
+            # we have to manually add it in.
+            if "sourceAddress" not in dataframe.columns:
+                address_column_index = dataframe.columns.get_loc("address")
+                dataframe.insert(address_column_index+1, "sourceAddress", pandas.Series())
+            else:
+                source_address_column = dataframe.pop("sourceAddress")
+                address_column_index = dataframe.columns.get_loc("address")
+                dataframe.insert(address_column_index+1, "sourceAddress", source_address_column)
+
             self.slapi_print(dataframe)
 
     def inventoryfull(self, partition=None):
 
-        # Enter a context with an instance of the API client
-        with lumosapi_client.ApiClient(self.configuration) as api_client:
-            # Create an instance of the API class
-            api_instance = lumosapi_client.TFinityApi(api_client)
-
-            # Get the inventory from the library
-            api_response = api_instance.get_inventory(partition=partition)
-            json_doc = api_response.to_json()
-            dataframe_inventory = pandas.json_normalize(json.loads(json_doc), record_path='value')
-            dataframe_inventory = dataframe_inventory.sort_values(by=['partition', 'address'])
-
-            # Retrieve TeraPack Magazine Information
-            api_response = api_instance.get_magazines(partition=partition)
-            json_doc = api_response.to_json()
-            dataframe_magazines = pandas.json_normalize(json.loads(json_doc), record_path='value')
-            dataframe_magazines = dataframe_magazines.explode('slots')
-            dataframe_slots = dataframe_magazines['slots'].apply(pandas.Series)
-            dataframe_slots = dataframe_slots.add_prefix('slot.')
-            dataframe_magazines = pandas.concat([dataframe_magazines.drop(['slots'], axis=1), dataframe_slots], axis=1)
-            dataframe_magazines = dataframe_magazines.sort_values(by=['slot.partition', 'slot.address', 'barcode'])
-            dataframe_magazines.pop('state')
-            dataframe_magazines.pop('slot.containerState')
-
-            dataframe = pandas.merge(dataframe_inventory, dataframe_magazines, left_on=['partition', 'address'], right_on=['slot.partition', 'slot.address'], how='outer')
-            #dataframe.pop('mediaBarcode')
-            dataframe.pop('slot.address')
-            dataframe.pop('slot.containerType')
-            dataframe.pop('slot.mediaType')
-            dataframe.pop('slot.partition')
-            dataframe.pop('slot.mediaBarcode')
-            dataframe = dataframe.rename(columns={'barcode': 'magazineBarcode'})
-            self.slapi_print(dataframe)
+        dataframe = self.get_inventoryfull_dataframe(partition=partition)
+        self.slapi_print(dataframe)
 
     def librarystatus(self):
 
@@ -466,17 +560,21 @@ class SpectraLogicAPI:
                 self.save_cookies()
 
         except lumosapi_client.exceptions.UnauthorizedException as e:
-            if self.verbose:
-                print("Login Failed...", file=sys.stderr)
             self.loggedin       = False
             self.token          = ""
             self.tokenexpiresat = -1
             self.refreshuntil   = -1
             self.clear_cookie()
             self.save_cookies()
+
+            if self.verbose or self.num_tries >= 1:
+                print(f"Login to {self.server} Failed.", file=sys.stderr)
+
             if self.num_tries < 1:
                 self.num_tries = self.num_tries + 1
                 self.login()
+            else:
+                sys.exit(1)
         except Exception as e:
             if self.verbose:
                 print(f"Exception when calling TFinityApi->login ({type(e).__name__} {e})", file=sys.stderr)
@@ -539,7 +637,15 @@ class SpectraLogicAPI:
             dataframe.pop('remedy')
             self.slapi_print(dataframe)
 
-    def move(self, partition, source, destination, wait=True):
+    def move(self, partition, sourcebarcode, destination, wait=True):
+
+        dataframe = self.get_inventoryfull_dataframe(partition=partition)
+        rows = dataframe.query(f"mediaBarcode == '{sourcebarcode}'")
+        if len(rows) == 0:
+            raise(Exception(f"Error: Unable to locate barcode {sourcebarcode} in partition {partition}"))
+        elif len(rows) > 1:
+            raise(Exception(f"Error: Multiple rows for barcode {sourcebarcode} in partition {partition} found"))
+        source = int(rows.iloc[0]["address"])
 
         # For now only allow drive to slot or slot to drive
         # moves, just like we used to in the old version of
@@ -551,15 +657,15 @@ class SpectraLogicAPI:
             source_type = "drive"
             destination_type = "slot"
             if destination >= 256 and destination < 4096:
-                raise(Exception("Error: Invalid drive to drive move"))
+                raise(Exception(f"Error: Invalid drive to drive move"))
         # This means the tape cartridge is in a slot
         elif source >= 4096:
             source_type = "slot"
             destination_type = "drive"
             if destination >= 4096:
-                raise(Exception("Error: Invalid slot to slot move"))
+                raise(Exception(f"Error: Invalid slot to slot move"))
         else:
-            raise(Exception("Error: Invalid move"))
+            raise(Exception(f"Error: Invalid move"))
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -573,11 +679,11 @@ class SpectraLogicAPI:
 
             if wait == True:
                 self.taskwait(task_id=task_id, timeout=600, operation="media move")
-                print(f"Media move succeeded from {source_type}: {source} to {destination_type}: {destination}.")
+                print(f"Media move for {sourcebarcode} succeeded from {source_type}: {source} to {destination_type}: {destination}.")
             else:
-                print(f"Media move started. TaskId: {task_id}")
+                print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
-    def robotservice(self, robot, action, wait=True):
+    def robotservice(self, robot=None, action=None, wait=True):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -589,14 +695,14 @@ class SpectraLogicAPI:
             elif robot == "2":
                 robot = "Robot:2"
             else:
-                raise(Exception("Error: Invalid robotservice robot number"))
+                raise(Exception(f"Error: Invalid robotservice robot number"))
 
             if action.lower() == "beginservice":
                 action = "BEGIN_SERVICE"
             elif action.lower() == "endservice":
                 action = "END_SERVICE"
             else:
-                raise(Exception("Error: Invalid robotservice robot action"))
+                raise(Exception(f"Error: Invalid robotservice robot action"))
 
             # Start the robot service action
             api_response = api_instance.start_fru_action(robot, action)
@@ -749,6 +855,34 @@ class SpectraLogicAPI:
             api_response = api_instance.get_api_documentation()
             pprint(api_response)
 
+    def sysloglist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Set the syslog settings for the library
+            api_response = api_instance.get_syslog_settings()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            self.slapi_print(dataframe)
+
+    def syslogupdate(self, syslog_server=None, syslog_port=514):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            syslog_settings = lumosapi_client.SyslogSettings(remoteServer=syslog_server, port=syslog_port)
+
+            # Set the syslog settings for the library
+            api_response = api_instance.set_syslog_settings(syslog_settings)
+
+            # If we got here assume the syslog settings were updated successfully
+            print(f"Syslog settings updated successfully.")
+
     def tasklist(self):
 
         # Enter a context with an instance of the API client
@@ -763,14 +897,18 @@ class SpectraLogicAPI:
             if self.debug:
                 print(f"START_TIME: {start_time}", file=sys.stderr)
 
-            api_response = api_instance.get_tasks(end_time=end_time, limit=100)
+            # Here we retrieve a list of all the tasks and whittle it down
+            # to the tasks started over the past 7 days. The API only provides
+            # us a way to see the completed tasks after a specified time
+            # tasks that started before a specified time.
+            api_response = api_instance.get_tasks()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe.pop('class')
             dataframe.pop('type')
-            dataframe.pop('tags')
             dataframe = dataframe.sort_values(by=['startTime'])
-            self.slapi_print(dataframe)
+            dataframe_current_tasks = dataframe[dataframe['startTime'] >= start_time]
+            self.slapi_print(dataframe_current_tasks)
 
     def taskwait(self, task_id, timeout=None, operation="operation"):
 
@@ -987,7 +1125,7 @@ class SpectraLogicAPI:
             barcode.text = "CLN010LX"
 
         except Exception as e:
-            raise(Exception("create_audit_results_XML_records Error creating XML"))
+            raise(Exception(f"create_audit_results_XML_records Error creating XML"))
 
         return(inventory)
 
@@ -1046,7 +1184,13 @@ def main():
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
 
-    frus_parser = cmdsubparsers.add_parser('drivesummary',
+    drivelist_parser = cmdsubparsers.add_parser('drivelist',
+        help='Retrieve the drives in the library.')
+
+    drivelist_parser.add_argument('partition', action='store', nargs='?',
+        help='Library partition to retrieve drive information for. If the partition is omitted then all drives are returned.')
+
+    drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
     frus_parser = cmdsubparsers.add_parser('frus',
@@ -1092,9 +1236,8 @@ def main():
 
     move_parser.add_argument('partition', action='store',
         help='Library partition to use for the move.')
-    move_parser.add_argument('source', action='store',
-        type=int,
-        help='Source location for tape cartridge.')
+    move_parser.add_argument('sourcebarcode', action='store',
+        help='Source barcode for tape cartridge.')
     move_parser.add_argument('destination', action='store',
         type=int,
         help='Destination location to move tape cartridge to.')
@@ -1128,7 +1271,8 @@ def main():
 
     robotservice_parser = cmdsubparsers.add_parser('robotservice',
         help='Send robot to/from service bay.')
-    robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand")
+    robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand", required=True)
+
     robotservice_beginservice_parser = robotservice_subparser.add_parser('beginservice', help='Move robot to the service bay')
     robotservice_beginservice_parser.add_argument('robot',
         action='store',
@@ -1152,6 +1296,21 @@ def main():
 
     spec_parser = cmdsubparsers.add_parser('spec',
         help='Get the newest REST API spec.')
+
+    syslog_parser = cmdsubparsers.add_parser('syslog',
+        help='Syslog command help.')
+    syslog_subparser = syslog_parser.add_subparsers(title="subcommands", dest="subcommand")
+
+    syslog_list_parser = syslog_subparser.add_parser('list',
+        help='List the library syslog settings.')
+
+    syslog_update_parser = syslog_subparser.add_parser('update',
+        help='Update library syslog settings.')
+    syslog_update_parser.add_argument('syslog_server', action='store',
+        help='Syslog server to use for the library.')
+    syslog_update_parser.add_argument('syslog_port', action='store',
+        type=int,
+        help='Syslog port to use for the library.')
 
     task_parser = cmdsubparsers.add_parser('task',
         help='task command help.')
@@ -1218,11 +1377,11 @@ def main():
 
     try:
         if args.server is None or args.server == "":
-            raise(Exception("Error: SERVER not specified"))
+            raise(Exception(f"Error: SERVER not specified"))
         if args.user is None or args.user == "":
-            raise(Exception("Error: USER not specified"))
+            raise(Exception(f"Error: USER not specified"))
         if args.passwd is None:
-            raise(Exception("Error: PASSWD not specified"))
+            raise(Exception(f"Error: PASSWD not specified"))
     except Exception as e:
         print(str(e))
         sys.exit(1)
@@ -1234,6 +1393,8 @@ def main():
             if args.command is None:
                 cmdparser.print_help()
                 sys.exit(1)
+            elif args.command == "drivelist":
+                slapi.drivelist(partition=args.partition)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
             elif args.command == "frus":
@@ -1248,7 +1409,7 @@ def main():
                 if args.subcommand is None or args.subcommand == "types":
                     slapi.logtypes()
                 else:
-                    raise(Exception("log: Unknown option " + args.subcommand))
+                    raise(Exception(f"log: Unknown option {args.subcommand}"))
             elif args.command == "login":
                 slapi.login()
             elif args.command == "magazines":
@@ -1256,7 +1417,7 @@ def main():
             elif args.command == "messages":
                 slapi.messages()
             elif args.command == "move":
-                slapi.move(partition=args.partition, source=args.source, destination=args.destination, wait=args.wait)
+                slapi.move(partition=args.partition, sourcebarcode=args.sourcebarcode, destination=args.destination, wait=args.wait)
             elif args.command == "package":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.packagelist()
@@ -1269,7 +1430,7 @@ def main():
                 elif args.subcommand == "upload":
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
-                    raise(Exception("package: Unknown option " + args.subcommand))
+                    raise(Exception(f"package: Unknown option {args.subcommand}"))
             elif args.command == "robotservice":
                 slapi.robotservice(robot=args.robot, action=args.subcommand, wait=args.wait)
             elif args.command == "securityaudit":
@@ -1278,13 +1439,20 @@ def main():
                 slapi.securityauditlog()
             elif args.command == "spec":
                 slapi.spec()
+            elif args.command == "syslog":
+                if args.subcommand is None or args.subcommand == "list":
+                    slapi.sysloglist()
+                elif args.subcommand == "update":
+                    slapi.syslogupdate(syslog_server=args.syslog_server, syslog_port=args.syslog_port)
+                else:
+                    raise(Exception(f"package: Unknown option {args.subcommand}"))
             elif args.command == "task":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.tasklist()
                 elif args.subcommand == "wait":
                     slapi.taskwait(task_id=args.task_id)
                 else:
-                    raise(Exception("task: Unknown option " + args.subcommand))
+                    raise(Exception("task: Unknown option {args.subcommand}"))
             else:
                 cmdparser.print_help()
                 sys.exit(1)
@@ -1298,6 +1466,9 @@ def main():
             if slapi.verbose:
                 print("Unauthorized...Logging in again...", file=sys.stderr)
             slapi.login()
+            # If we are not logged in at this point we have a problem
+            if not slapi.loggedin and slapi.num_tries >= 1:
+                sys.exit(1)
         except (lumosapi_client.exceptions.ConflictException,
                 lumosapi_client.exceptions.NotFoundException,
                 lumosapi_client.exceptions.UnprocessableEntityException) as e:
