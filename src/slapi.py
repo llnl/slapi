@@ -609,6 +609,20 @@ class SpectraLogicAPI:
             dataframe = dataframe.rename(columns={'barcode': 'magazineBarcode'})
             self.slapi_print(dataframe)
 
+    def messages(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get messages from the library
+            api_response = api_instance.get_messages()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe.pop('read')
+            self.slapi_print(dataframe)
+
     def move(self, partition, sourcebarcode, destination, wait=True):
 
         dataframe = self.get_inventoryfull_dataframe(partition=partition)
@@ -1200,6 +1214,9 @@ def main():
     magazines_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve magazines for. If the partition is omitted then all partitions are returned.')
 
+    messages_parser = cmdsubparsers.add_parser('messages',
+        help='Retrieve the library messages.')
+
     move_parser = cmdsubparsers.add_parser('move',
         help='Move tape cartridges around the library.')
 
@@ -1383,6 +1400,8 @@ def main():
                 slapi.login()
             elif args.command == "magazines":
                 slapi.magazines(partition=args.partition)
+            elif args.command == "messages":
+                slapi.messages()
             elif args.command == "move":
                 slapi.move(partition=args.partition, sourcebarcode=args.sourcebarcode, destination=args.destination, wait=args.wait)
             elif args.command == "package":
