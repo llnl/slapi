@@ -621,6 +621,8 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe.pop('read')
+            dataframe.pop('uid')
+            dataframe.pop('id')
             self.slapi_print(dataframe)
 
     def move(self, partition, sourcebarcode, destination, wait=True):
