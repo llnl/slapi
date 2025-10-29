@@ -11,7 +11,7 @@ PACKAGENAME             = slapi
 PACKAGEVERSION         := $(shell cat VERSION)
 PACKAGERELEASE         := $(shell cat RELEASE)
 BUILDSOURCE             = --buildsource
-URL                     = git@github.com:LLNL/$(PACKAGENAME).git
+URL                     = ssh://git@izgitlab.llnl.gov:7999/ssg/$(PACKAGENAME).git
 JAVA_HOME              := /etc/alternatives/jre_21
 PATH                   := $(JAVA_HOME)/bin:$(PATH)
 
