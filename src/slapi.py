@@ -41,7 +41,7 @@ slapipath = os.path.abspath(__file__)
 slapidir  = os.path.dirname(slapipath)
 lumospath = f"{slapidir}/lumosapi_client"
 if os.path.isdir(f"{lumospath}"):
-    sys.path.append(f"{lumospath}")
+    sys.path.insert(0, f"{lumospath}")
 
 import lumosapi_client
 from lumosapi_client.models.fru_list import FRUList
@@ -621,6 +621,33 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe.pop('read')
+            self.slapi_print(dataframe)
+
+    def mlmlist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get MLM Records from the library
+            api_response = api_instance.get_mlm()
+            #pprint(api_response)
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe = dataframe.sort_values(by=['currentPartition', 'barcode', 'tapeSerial'])
+
+            dataframe.pop('MAMReadOnLoad')
+            dataframe.pop('isTapeRead')
+            dataframe.pop('lastLoadedPartition')
+            dataframe.pop('manufacturerID')
+            dataframe.pop('firstWriteLibrary')
+            dataframe.pop('firstWritePartition')
+            dataframe.pop('export')
+            dataframe.pop('import')
+            dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('readWrite.')]
+            dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
+
             self.slapi_print(dataframe)
 
     def move(self, partition, sourcebarcode, destination, wait=True):
@@ -1217,6 +1244,9 @@ def main():
     messages_parser = cmdsubparsers.add_parser('messages',
         help='Retrieve the library messages.')
 
+    mlmlist_parser = cmdsubparsers.add_parser('mlmlist',
+        help='Retrieve a list of MLM records in the library.')
+
     move_parser = cmdsubparsers.add_parser('move',
         help='Move tape cartridges around the library.')
 
@@ -1402,6 +1432,8 @@ def main():
                 slapi.magazines(partition=args.partition)
             elif args.command == "messages":
                 slapi.messages()
+            elif args.command == "mlmlist":
+                slapi.mlmlist()
             elif args.command == "move":
                 slapi.move(partition=args.partition, sourcebarcode=args.sourcebarcode, destination=args.destination, wait=args.wait)
             elif args.command == "package":
