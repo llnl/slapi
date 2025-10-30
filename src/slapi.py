@@ -503,6 +503,35 @@ class SpectraLogicAPI:
             self.slapi_print(None)
             self.slapi_print(dataframe_doors)
 
+    def logdownload(self, logname=None, logtype=None, logdate=None):
+        write_size = 1024
+
+        if logname is None:
+            raise(Exception(f"Error: Invalid filename specfied."))
+
+        if logtype is None:
+            raise(Exception(f"Error: Invalid log type specified."))
+
+        end_date = datetime.datetime.now() - datetime.timedelta(days=1)
+        end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        if logdate is not None:
+            end_date = datetime.datetime.strptime(logdate, "%Y-%m-%dT%H:%M:%S")
+            end_date = end_date.replace(microsecond=0)
+        start_date = end_date - datetime.timedelta(days=1)
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the log from the library
+            api_response = api_instance.download_logs_synchronous(log_type=[logtype], save_to_usbs=False, start_time=start_date, end_time=end_date)
+
+            with open(logname, 'wb') as f:
+                for i in range(0, len(api_response), write_size):
+                    buf = api_response[i : i + write_size]
+                    f.write(buf)
+
     def logtypes(self):
 
         # Enter a context with an instance of the API client
@@ -1227,15 +1256,24 @@ def main():
     librarystatus_parser = cmdsubparsers.add_parser('librarystatus',
         help='Retrieve library status information.')
 
-    login_parser = cmdsubparsers.add_parser('login',
-        help='Login and get tokens from the library.')
-
     log_parser = cmdsubparsers.add_parser('log',
         help='log command help.')
     log_subparser = log_parser.add_subparsers(title="subcommands", dest="subcommand")
 
+    log_download_parser = log_subparser.add_parser('download',
+        help='Download the specified type of log from the library. e.g. motion or motion:app')
+    log_download_parser.add_argument('logname', action='store',
+        help='Name to use for logfile output.')
+    log_download_parser.add_argument('logtype', action='store',
+        help='Type of log to download. e.g. motion or motion:app')
+    log_download_parser.add_argument('logdate', action='store', nargs='?',
+        help='Date to gather for logfile output. The logs gathered will include the specified date and 24 hours prior.')
+
     log_types_parser = log_subparser.add_parser('types',
         help='List the available log types from the library.')
+
+    login_parser = cmdsubparsers.add_parser('login',
+        help='Login and get tokens from the library.')
 
     magazines_parser = cmdsubparsers.add_parser('magazines',
         help='Retrieve magazines from the library.')
@@ -1426,6 +1464,8 @@ def main():
             elif args.command == "log":
                 if args.subcommand is None or args.subcommand == "types":
                     slapi.logtypes()
+                elif args.subcommand == "download":
+                    slapi.logdownload(logname=args.logname, logtype=args.logtype, logdate=args.logdate)
                 else:
                     raise(Exception(f"log: Unknown option {args.subcommand}"))
             elif args.command == "login":
