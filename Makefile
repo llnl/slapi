@@ -39,7 +39,7 @@ svntag:
 tag: .PHONY
 	@echo Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
 	git tag -a $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE) -m "Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)"
-	@echo To push your new tag to GitHub run:
+	@echo To push your new tag to GitLab run:
 	@echo git push origin $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
 
 tags: .PHONY
