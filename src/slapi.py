@@ -927,6 +927,19 @@ class SpectraLogicAPI:
             # If we got here assume the syslog settings were updated successfully
             print(f"Syslog settings updated successfully.")
 
+    def taskinfo(self, task_id):
+
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get info on the specified task
+            api_response = api_instance.get_task(task_id)
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            self.slapi_print(dataframe)
+
     def tasklist(self):
 
         # Enter a context with an instance of the API client
@@ -1375,6 +1388,11 @@ def main():
     task_list_parser = task_subparser.add_parser('list',
         help='List tasks for library.')
 
+    task_info_parser = task_subparser.add_parser('info',
+        help='Get details for specified task.')
+    task_info_parser.add_argument('task_id', action='store',
+        help='Specific task id to get details for.')
+
     task_wait_parser = task_subparser.add_parser('wait',
         help='Wait for specified task to complete.')
     task_wait_parser.add_argument('task_id', action='store',
@@ -1509,6 +1527,8 @@ def main():
             elif args.command == "task":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.tasklist()
+                if args.subcommand == "info":
+                    slapi.taskinfo(task_id=args.task_id)
                 elif args.subcommand == "wait":
                     slapi.taskwait(task_id=args.task_id)
                 else:
