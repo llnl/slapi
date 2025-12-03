@@ -492,6 +492,20 @@ class SpectraLogicAPI:
             # Create an instance of the API class
             api_instance = lumosapi_client.TFinityApi(api_client)
 
+            # Retrieve Library Info
+            api_response = api_instance.get_library_info()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            dataframe.pop('timeMode')
+            dataframe.pop('ntpServers')
+            dataframe.pop('timeSource')
+            dataframe.pop('frontPanelTimezone')
+            dataframe.pop('ec')
+            dataframe.pop('topLevelAssemblyEC')
+            dataframe.pop('topLevelAssemblySerialNumber')
+            self.slapi_print(dataframe)
+            self.slapi_print(None)
+
             # Retrieve Current Library Status
             api_response = api_instance.get_library_status()
             json_doc = api_response.to_json()
