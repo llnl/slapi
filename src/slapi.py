@@ -1527,7 +1527,7 @@ def main():
             elif args.command == "task":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.tasklist()
-                if args.subcommand == "info":
+                elif args.subcommand == "info":
                     slapi.taskinfo(task_id=args.task_id)
                 elif args.subcommand == "wait":
                     slapi.taskwait(task_id=args.task_id)
