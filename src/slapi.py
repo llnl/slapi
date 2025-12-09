@@ -31,6 +31,7 @@ import urllib.error
 import platform
 import json
 import datetime
+import pytz
 import re
 import pandas
 import importlib
@@ -533,13 +534,21 @@ class SpectraLogicAPI:
             end_date = end_date.replace(microsecond=0)
         start_date = end_date - datetime.timedelta(days=1)
 
+        # Assume the time passed in uses local timezone
+        start_date = start_date.astimezone()
+        end_date = end_date.astimezone()
+
+        # Convert the time to UTC
+        start_date_utc = start_date.astimezone(pytz.utc)
+        end_date_utc = end_date.astimezone(pytz.utc)
+
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
             # Create an instance of the API class
             api_instance = lumosapi_client.TFinityApi(api_client)
 
             # Get the log from the library
-            api_response = api_instance.download_logs_synchronous(log_type=[logtype], save_to_usbs=False, start_time=start_date, end_time=end_date)
+            api_response = api_instance.download_logs_synchronous(log_type=[logtype], save_to_usbs=False, start_time=start_date_utc, end_time=end_date_utc)
 
             with open(logname, 'wb') as f:
                 for i in range(0, len(api_response), write_size):
@@ -595,10 +604,17 @@ class SpectraLogicAPI:
                 self.refreshuntil = api_response.refresh_until
                 self.token = api_response.token
                 self.tokenexpiresat = api_response.token_expires_at
+
+                # Save original configuration
+                old_configuration = self.configuration
                 self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}",
                                                                    access_token=self.token)
-                self.configuration.verify_ssl = False
-                self.configuration.client_side_validation = False
+
+                # Restore some saved settings
+                self.configuration.verify_ssl = old_configuration.verify_ssl
+                self.configuration.client_side_validation = old_configuration.client_side_validation
+                self.configuration.debug = old_configuration.debug
+                self.configuration.datetime_format = old_configuration.datetime_format
 
                 self.save_cookies()
 
