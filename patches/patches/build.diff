@@ -347,3 +347,91 @@ Index: lumosapi_client/lumosapi_client/models/mlm_list.py
  
      @classmethod
      def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/humidity_reading.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/humidity_reading.py	2025-12-10 16:51:52.990553000 -0800
++++ lumosapi_client/lumosapi_client/models/humidity_reading.py	2026-01-13 12:10:28.851439000 -0800
+@@ -23,6 +23,8 @@ from typing import Any, ClassVar, Dict,
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class HumidityReading(BaseModel):
+     """
+     HumidityReading
+@@ -47,7 +49,7 @@ class HumidityReading(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/library_humidity_metrics.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/library_humidity_metrics.py	2025-12-10 16:51:53.089565000 -0800
++++ lumosapi_client/lumosapi_client/models/library_humidity_metrics.py	2026-01-13 12:10:35.817573000 -0800
+@@ -23,6 +23,8 @@ from lumosapi_client.models.humidity_rea
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class LibraryHumidityMetrics(BaseModel):
+     """
+     LibraryHumidityMetrics
+@@ -48,7 +50,7 @@ class LibraryHumidityMetrics(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/library_temperature_metrics.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/library_temperature_metrics.py	2025-12-10 16:51:53.129552000 -0800
++++ lumosapi_client/lumosapi_client/models/library_temperature_metrics.py	2026-01-13 13:12:34.051142000 -0800
+@@ -23,6 +23,8 @@ from lumosapi_client.models.temperature_
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class LibraryTemperatureMetrics(BaseModel):
+     """
+     LibraryTemperatureMetrics
+@@ -48,7 +50,7 @@ class LibraryTemperatureMetrics(BaseMode
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/temperature_reading.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/temperature_reading.py	2025-12-10 16:51:53.832515000 -0800
++++ lumosapi_client/lumosapi_client/models/temperature_reading.py	2026-01-13 13:12:45.874001000 -0800
+@@ -23,6 +23,8 @@ from typing import Any, ClassVar, Dict,
+ from typing import Optional, Set
+ from typing_extensions import Self
+ 
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class TemperatureReading(BaseModel):
+     """
+     TemperatureReading
+@@ -47,7 +49,7 @@ class TemperatureReading(BaseModel):
+     def to_json(self) -> str:
+         """Returns the JSON representation of the model using alias"""
+         # TODO: pydantic v2: use .model_dump_json(by_alias=True, exclude_unset=True) instead
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+ 
+     @classmethod
+     def from_json(cls, json_str: str) -> Optional[Self]:

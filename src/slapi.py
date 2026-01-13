@@ -383,6 +383,32 @@ class SpectraLogicAPI:
     # DEFINE COMMAND FUNCTIONS
     #==========================================================================
 
+    def dlmlist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get DLM Records from the library
+            api_response = api_instance.get_dlm()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            #dataframe = dataframe.sort_values(by=['currentPartition', 'barcode', 'tapeSerial'])
+
+            #dataframe.pop('MAMReadOnLoad')
+            #dataframe.pop('isTapeRead')
+            #dataframe.pop('lastLoadedPartition')
+            #dataframe.pop('manufacturerID')
+            #dataframe.pop('firstWriteLibrary')
+            #dataframe.pop('firstWritePartition')
+            #dataframe.pop('export')
+            #dataframe.pop('import')
+            #dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('readWrite.')]
+            #dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
+
+            self.slapi_print(dataframe)
+
     def drivelist(self, partition=None):
 
         dataframe_partition = self.get_partition_dataframe(partition=partition)
@@ -413,6 +439,19 @@ class SpectraLogicAPI:
 
             # Get drive summary from the library
             api_response = api_instance.get_drives_summary()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            self.slapi_print(dataframe)
+
+    def environmentlist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the library environmental summary
+            api_response = api_instance.get_environment_summary()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
@@ -454,6 +493,30 @@ class SpectraLogicAPI:
 
             # Print the final one
             self.slapi_print(dataframe_fru)
+
+    def humiditymetrics(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the humidity metrics from the library
+            # For now we only try to get the most recent reading
+            # Hard code to 10 min interval 10 mins ago
+            start_time = (datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0) - datetime.timedelta(seconds=600)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            api_response = api_instance.get_humidity_metrics(start_time=start_time, interval="10m")
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+
+            for column_name in dataframe.columns:
+               tmp_dataframe = dataframe.pop(column_name)
+               tmp_dataframe = tmp_dataframe.explode(column_name).to_frame().dropna()
+               if not tmp_dataframe.empty:
+                   tmp_dataframe = tmp_dataframe[column_name].apply(pandas.Series)
+                   tmp_dataframe = tmp_dataframe.add_prefix(f"{column_name}.")
+                   self.slapi_print(tmp_dataframe)
+                   self.slapi_print(None)
 
     def inventory(self, partition=None):
 
@@ -693,7 +756,6 @@ class SpectraLogicAPI:
 
             # Get MLM Records from the library
             api_response = api_instance.get_mlm()
-            #pprint(api_response)
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             dataframe = dataframe.sort_values(by=['currentPartition', 'barcode', 'tapeSerial'])
@@ -1037,6 +1099,30 @@ class SpectraLogicAPI:
                 i = i+1
                 time.sleep(5)
 
+    def temperaturemetrics(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get the temperature metrics from the library
+            # For now we only try to get the most recent reading
+            # Hard code to 10 min interval 10 mins ago
+            start_time = (datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0) - datetime.timedelta(seconds=600)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            api_response = api_instance.get_temperature_metrics(start_time=start_time, interval="10m")
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+
+            for column_name in dataframe.columns:
+               tmp_dataframe = dataframe.pop(column_name)
+               tmp_dataframe = tmp_dataframe.explode(column_name).to_frame().dropna()
+               if not tmp_dataframe.empty:
+                   tmp_dataframe = tmp_dataframe[column_name].apply(pandas.Series)
+                   tmp_dataframe = tmp_dataframe.add_prefix(f"{column_name}.")
+                   self.slapi_print(tmp_dataframe)
+                   self.slapi_print(None)
+
     #--------------------------------------------------------------------------
     #
     # Closes the connection to the library.
@@ -1267,9 +1353,11 @@ def main():
                           help='Password for Spectra Logic Library Login. ' +
                                'Do not use this option if you care about security. ' +
                                'Specify the password in the config file instead.')
-
     pwaction.add_argument('--passwd', '-p', dest='passwd_prompt', action='store_true',
                           help='Prompt user for password to Spectra Logic Library.')
+
+    dlmlist_parser = cmdsubparsers.add_parser('dlmlist',
+        help='Retrieve a list of DLM records in the library.')
 
     drivelist_parser = cmdsubparsers.add_parser('drivelist',
         help='Retrieve the drives in the library.')
@@ -1280,19 +1368,23 @@ def main():
     drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
+    environmentlist_parser = cmdsubparsers.add_parser('environmentlist',
+        help='Get the library environmental settings.')
+
     frus_parser = cmdsubparsers.add_parser('frus',
         help='Retrieve a list of hardware field replaceable units currently in the library.')
 
+    humidity_parser = cmdsubparsers.add_parser('humidity',
+        help='Get the current humidity reading from the library.')
+
     inventory_parser = cmdsubparsers.add_parser('inventory',
         help='Retrieve inventory from the library.')
-
     inventory_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve inventory for. If the partition is omitted then all partitions are returned.')
 
 
     inventoryfull_parser = cmdsubparsers.add_parser('inventoryfull',
         help='Retrieve inventory from the library (including magazine info).')
-
     inventoryfull_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve inventory for. If the partition is omitted then all partitions are returned.')
 
@@ -1320,7 +1412,6 @@ def main():
 
     magazines_parser = cmdsubparsers.add_parser('magazines',
         help='Retrieve magazines from the library.')
-
     magazines_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve magazines for. If the partition is omitted then all partitions are returned.')
 
@@ -1332,7 +1423,6 @@ def main():
 
     move_parser = cmdsubparsers.add_parser('move',
         help='Move tape cartridges around the library.')
-
     move_parser.add_argument('partition', action='store',
         help='Library partition to use for the move.')
     move_parser.add_argument('sourcebarcode', action='store',
@@ -1428,6 +1518,9 @@ def main():
     task_wait_parser.add_argument('task_id', action='store',
         help='Specific task id to wait for.')
 
+    temperature_parser = cmdsubparsers.add_parser('temperature',
+        help='Get the current temperature reading from the library.')
+
     args = cmdparser.parse_args()
     if args.passwd_prompt:
         args.passwd = getpass.getpass()
@@ -1497,12 +1590,18 @@ def main():
             if args.command is None:
                 cmdparser.print_help()
                 sys.exit(1)
+            elif args.command == "dlmlist":
+                slapi.dlmlist()
             elif args.command == "drivelist":
                 slapi.drivelist(partition=args.partition)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
+            elif args.command == "environmentlist":
+                slapi.environmentlist()
             elif args.command == "frus":
                 slapi.frus()
+            elif args.command == "humidity":
+                slapi.humiditymetrics()
             elif args.command == "inventory":
                 slapi.inventory(partition=args.partition)
             elif args.command == "inventoryfull":
@@ -1563,6 +1662,8 @@ def main():
                     slapi.taskwait(task_id=args.task_id)
                 else:
                     raise(Exception("task: Unknown option {args.subcommand}"))
+            elif args.command == "temperature":
+                slapi.temperaturemetrics()
             else:
                 cmdparser.print_help()
                 sys.exit(1)
