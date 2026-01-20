@@ -489,7 +489,7 @@ class SpectraLogicAPI:
                     printheader = True
                     fru_type = fru['type']
                 else:
-                    dataframe_fru.loc[len(dataframe_fru)] = json.loads(json_doc_fru)
+                    dataframe_fru = pandas.concat([dataframe_fru, tmp_dataframe_fru])
 
             # Print the final one
             self.slapi_print(dataframe_fru)
