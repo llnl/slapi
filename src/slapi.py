@@ -1097,6 +1097,24 @@ class SpectraLogicAPI:
                 i = i+1
                 time.sleep(5)
 
+    def logdownloadrimtousb(self, rim, wait=True):
+        match = re.match(r"RIM:\d+:\d+", rim)
+        if not match:
+            print(f"ERROR: Please make sure the RIM name has the following format: 'RIM:1:1'")
+            sys.exit()
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+            api_response = api_instance.start_fru_action(rim, "WRITE_LOGS_TO_USB")
+            
+            task_id = api_response.task_id
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=120, operation="write rim logs to usb")
+                print(f"Writing RIM logs for {rim} to USB succeeded.")
+            else:
+                print(f"Writing RIM logs for {rim} to USB started. TaskId: {task_id}")
+
     def temperaturemetrics(self):
 
         # Enter a context with an instance of the API client
@@ -1120,6 +1138,7 @@ class SpectraLogicAPI:
                    tmp_dataframe = tmp_dataframe.add_prefix(f"{column_name}.")
                    self.slapi_print(tmp_dataframe)
                    self.slapi_print(None)
+
 
     #--------------------------------------------------------------------------
     #
@@ -1405,6 +1424,11 @@ def main():
     log_types_parser = log_subparser.add_parser('types',
         help='List the available log types from the library.')
 
+    log_rimtousb_parser = log_subparser.add_parser('rimtousb',
+        help='Write the RIM logs to a USB. Note: This is not an official log type and can only be saved to a USB.')
+    log_rimtousb_parser.add_argument('rim', action='store',
+        help='Specify the RIM (Ex: RIM:1:1)')
+
     login_parser = cmdsubparsers.add_parser('login',
         help='Login and get tokens from the library.')
 
@@ -1611,6 +1635,8 @@ def main():
                     slapi.logtypes()
                 elif args.subcommand == "download":
                     slapi.logdownload(logname=args.logname, logtype=args.logtype, logdate=args.logdate)
+                elif args.subcommand == "rimtousb":
+                    slapi.logdownloadrimtousb(rim=args.rim)
                 else:
                     raise(Exception(f"log: Unknown option {args.subcommand}"))
             elif args.command == "login":
