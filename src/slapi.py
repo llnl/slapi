@@ -26,8 +26,7 @@ import time
 import pathlib
 import configparser
 import logging
-import urllib.request
-import urllib.error
+import urllib3
 import platform
 import json
 import datetime
@@ -108,6 +107,9 @@ class SpectraLogicAPI:
         self.configuration.verify_ssl = False
         self.configuration.client_side_validation = False
         self.configuration.debug = args.debug
+
+        # Set the number of retries
+        self.configuration.retries = 1
 
         # Initialize the datetime format for commands
         self.configuration.datetime_format = "%Y-%m-%dT%H:%M:%SZ"
@@ -289,7 +291,7 @@ class SpectraLogicAPI:
         for line in json_lines:
             line = line.rstrip()
             if line != "":
-                print(line)
+                print(line, flush=True)
 
     #--------------------------------------------------------------------------
     #
@@ -301,9 +303,9 @@ class SpectraLogicAPI:
                 self.print_json_document(dataframe.to_json(orient='records'))
         else:
             if dataframe is None:
-                print()
+                print(flush=True)
                 return
-            print(dataframe.to_markdown(index=False, tablefmt='simple'))
+            print(dataframe.to_markdown(index=False, tablefmt='simple'), flush=True)
 
     #==========================================================================
     # DEFINE SHARED COMMAND FUNCTIONS
@@ -477,8 +479,20 @@ class SpectraLogicAPI:
                 if self.debug:
                     print(f"Getting FRU status for: {fru['name']}...", file=sys.stderr)
 
-                api_response = api_instance.get_fru_status(fru['name'])
-                json_doc_fru = api_response.to_json()
+                # Below we explicitly set the _request_timeout.
+                # We have seen problematic drives take 5-10 minutes to respond to this API
+                # call, so make sure to limit how long we wait here.
+                # If we fail we mark the state as UNKNOWN.
+                try:
+                    api_response = api_instance.get_fru_status(fru['name'], _request_timeout=10.0)
+                    json_doc_fru = api_response.to_json()
+                except urllib3.exceptions.MaxRetryError as e:
+                    json_string = { "name": fru['name'],
+                                    "status": "UNKNOWN",
+                                    "type": "DRIVE"
+                    }
+                    json_doc_fru = json.dumps(json_string)
+
                 tmp_dataframe_fru = pandas.json_normalize(json.loads(json_doc_fru))
 
                 if fru['type'] != fru_type:
@@ -912,22 +926,13 @@ class SpectraLogicAPI:
 
             # Begin update of library
             api_response = api_instance.start_library_update(package_update_request)
-            pprint(api_response)
+            task_id = api_response.task_id
 
-    def packageupdatestatus(self):
-
-        # Enter a context with an instance of the API client
-        with lumosapi_client.ApiClient(self.configuration) as api_client:
-            # Create an instance of the API class
-            api_instance = lumosapi_client.TFinityApi(api_client)
-
-            # Get library update status
-            api_response = api_instance.get_package_update_state()
-            json_doc = api_response.to_json()
-            dataframe = pandas.json_normalize(json.loads(json_doc))
-            print(dataframe.to_string(index=False))
-            print("")
-            pprint(api_response)
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=7200, operation="package update")
+                print(f"Package update succeeded.")
+            else:
+                print(f"Package update started. TaskId: {task_id}")
 
     def packageupload(self, package_file, pubkey_file):
 
@@ -1446,9 +1451,6 @@ def main():
     package_update_parser.add_argument('package_file', action='store',
         help='Software package file to update library to.')
 
-    package_updatestatus_parser = package_subparser.add_parser('updatestatus',
-        help='Get software update status from the library.')
-
     package_upload_parser = package_subparser.add_parser('upload',
         help='Upload a new software package to the library.')
     package_upload_parser.add_argument('package_file', action='store',
@@ -1630,8 +1632,6 @@ def main():
                     slapi.packagedelete(args.package_file)
                 elif args.subcommand == "update":
                     slapi.packageupdate(args.package_file)
-                elif args.subcommand == "updatestatus":
-                    slapi.packageupdatestatus()
                 elif args.subcommand == "upload":
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
