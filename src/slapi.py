@@ -489,7 +489,7 @@ class SpectraLogicAPI:
                 except urllib3.exceptions.MaxRetryError as e:
                     json_string = { "name": fru['name'],
                                     "status": "UNKNOWN",
-                                    "type": "DRIVE"
+                                    "type": fru['type']
                     }
                     json_doc_fru = json.dumps(json_string)
 
