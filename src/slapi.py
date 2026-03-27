@@ -24,6 +24,7 @@ import functools
 import stat
 import time
 import pathlib
+import textwrap
 import configparser
 import logging
 import urllib3
@@ -96,7 +97,21 @@ class SpectraLogicAPI:
         if args.port is not None:
             self.baseurl = httpstr + args.server + ":" + str(args.port) + "/api"
 
+        # Initialize pandas default settings
+        pandas.options.display.max_columns = None
+        pandas.options.display.max_colwidth = None
+        pandas.options.display.max_rows = None
+        pandas.set_option('expand_frame_repr', False)
+
         self.load_cookie()
+        self.set_configuration()
+
+        # Attempt to refresh the token if needed/possible
+        self.token_refresh()
+
+    #--------------------------------------------------------------------------
+    #
+    def set_configuration(self):
 
         if self.token == "":
             self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}")
@@ -106,7 +121,7 @@ class SpectraLogicAPI:
 
         self.configuration.verify_ssl = False
         self.configuration.client_side_validation = False
-        self.configuration.debug = args.debug
+        self.configuration.debug = self.debug
 
         # Set the number of retries
         self.configuration.retries = 1
@@ -114,11 +129,9 @@ class SpectraLogicAPI:
         # Initialize the datetime format for commands
         self.configuration.datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 
-        # Initialize pandas default settings
-        pandas.options.display.max_columns = None
-        pandas.options.display.max_colwidth = None
-        pandas.options.display.max_rows = None
-        pandas.set_option('expand_frame_repr', False)
+        if self.debug:
+            print(f"[DEBUG] set_configuration(): ", file=sys.stderr, flush=True)
+            print(f"{textwrap.indent(str(self), '[DEBUG] ')} ", file=sys.stderr, flush=True)
 
     #--------------------------------------------------------------------------
     #
@@ -269,15 +282,82 @@ class SpectraLogicAPI:
             with open(self.cookiefile, 'w') as cookiefile:
                 for json_obj in json_list:
                     json.dump(json_obj, cookiefile)
-                    print("", file=cookiefile)
+                    print("", file=cookiefile, flush=True)
 
         except Exception as e:
-            print(f"{e}", file=sys.stderr)
+            print(f"{e}", file=sys.stderr, flush=True)
             os.umask(0o077)
             self.loggedin       = False
             self.token          = ""
             self.tokenexpiresat = -1
             self.refreshuntil   = -1
+
+    #--------------------------------------------------------------------------
+    #
+    def token_expires_soon(self, timeout=120):
+
+        if self.tokenexpiresat < 0 or self.tokenexpiresat < timeout:
+            return(True)
+
+        now_dt            = datetime.datetime.now()
+        tokenexpiresat_dt = datetime.datetime.fromtimestamp(self.tokenexpiresat)
+        soon_dt           = tokenexpiresat_dt - datetime.timedelta(seconds=timeout)
+
+        if now_dt < soon_dt:
+            return(False)
+
+        if self.verbose:
+            print(f"Token expiring soon. Now: {now_dt} Soon: {soon_dt} Expire time: {tokenexpiresat_dt} Timeout: {timeout}", file=sys.stderr, flush=True)
+
+        return(True)
+
+    #--------------------------------------------------------------------------
+    #
+    def token_refresh(self, timeout=10):
+
+        # Do not attempt to refresh the token if not initialized yet
+        if self.tokenexpiresat < 0 or self.refreshuntil < 0 or self.refreshuntil < timeout:
+            if self.verbose:
+                print(f"Not attempting token refresh. Expire time: {self.tokenexpiresat} Refresh until: {self.refreshuntil}", file=sys.stderr, flush=True)
+            return
+
+        now_dt            = datetime.datetime.now()
+        tokenexpiresat_dt = datetime.datetime.fromtimestamp(self.tokenexpiresat)
+        refreshuntil_dt   = datetime.datetime.fromtimestamp(self.refreshuntil)
+        soon_dt           = refreshuntil_dt - datetime.timedelta(seconds=timeout)
+
+        if now_dt >= tokenexpiresat_dt:
+            if self.verbose:
+                print(f"Token is already expired. Now: {now_dt} Expire time: {tokenexpiresat_dt} Refresh until: {refreshuntil_dt}", file=sys.stderr, flush=True)
+            return
+
+        if now_dt >= soon_dt:
+            if self.verbose:
+                print(f"Token refresh until is close. Refusing to automatically refresh. Now: {now_dt} Soon: {soon_dt} Refresh until: {refreshuntil_dt}", file=sys.stderr, flush=True)
+            return
+
+        if self.token_expires_soon():
+
+            if self.verbose:
+                print(f"Attempting to refresh token. Now: {now_dt} Expire time: {refreshuntil_dt}", file=sys.stderr, flush=True)
+
+            # Enter a context with an instance of the API client
+            with lumosapi_client.ApiClient(self.configuration) as api_client:
+                # Create an instance of the API class
+                api_instance = lumosapi_client.TFinityApi(api_client)
+
+                # Attempt to refresh the token
+                api_response = api_instance.refresh_token()
+
+                # The refresh succeeded
+                self.loggedin = True
+                self.refreshuntil = api_response.refresh_until
+                self.token = api_response.token
+                self.tokenexpiresat = api_response.token_expires_at
+
+                # Set the configuration
+                self.set_configuration()
+                self.save_cookies()
 
     #--------------------------------------------------------------------------
     #
@@ -477,7 +557,7 @@ class SpectraLogicAPI:
             dataframe_fru = None
             for index, fru in dataframe.iterrows():
                 if self.debug:
-                    print(f"Getting FRU status for: {fru['name']}...", file=sys.stderr)
+                    print(f"[DEBUG] Getting FRU status for: {fru['name']}...", file=sys.stderr, flush=True)
 
                 # Below we explicitly set the _request_timeout.
                 # We have seen problematic drives take 5-10 minutes to respond to this API
@@ -680,17 +760,8 @@ class SpectraLogicAPI:
                 self.token = api_response.token
                 self.tokenexpiresat = api_response.token_expires_at
 
-                # Save original configuration
-                old_configuration = self.configuration
-                self.configuration = lumosapi_client.Configuration(host=f"{self.baseurl}",
-                                                                   access_token=self.token)
-
-                # Restore some saved settings
-                self.configuration.verify_ssl = old_configuration.verify_ssl
-                self.configuration.client_side_validation = old_configuration.client_side_validation
-                self.configuration.debug = old_configuration.debug
-                self.configuration.datetime_format = old_configuration.datetime_format
-
+                # Set the configuration
+                self.set_configuration()
                 self.save_cookies()
 
         except lumosapi_client.exceptions.UnauthorizedException as e:
@@ -702,7 +773,7 @@ class SpectraLogicAPI:
             self.save_cookies()
 
             if self.verbose or self.num_tries >= 1:
-                print(f"Login to {self.server} Failed.", file=sys.stderr)
+                print(f"Login to {self.server} Failed.", file=sys.stderr, flush=True)
 
             if self.num_tries < 1:
                 self.num_tries = self.num_tries + 1
@@ -711,7 +782,7 @@ class SpectraLogicAPI:
                 sys.exit(1)
         except Exception as e:
             if self.verbose:
-                print(f"Exception when calling TFinityApi->login ({type(e).__name__} {e})", file=sys.stderr)
+                print(f"Exception when calling TFinityApi->login ({type(e).__name__} {e})", file=sys.stderr, flush=True)
             self.loggedin       = False
             self.token          = ""
             self.tokenexpiresat = -1
@@ -901,20 +972,15 @@ class SpectraLogicAPI:
 
     def packagedelete(self, package_file):
 
-        try:
-            # Enter a context with an instance of the API client
-            with lumosapi_client.ApiClient(self.configuration) as api_client:
-                # Create an instance of the API class
-                api_instance = lumosapi_client.TFinityApi(api_client)
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
 
-                # Remove package from the library
-                api_response = api_instance.delete_package(package_file)
-                # If we got here assume the package was deleted successfully
-                print(f"Package {package_file} successfully deleted from library.")
-
-        except lumosapi_client.exceptions.NotFoundException as e:
-            print(f"Package {package_file} is not stored on the library.", file=sys.stderr)
-            sys.exit(1)
+            # Remove package from the library
+            api_response = api_instance.delete_package(package_file)
+            # If we got here assume the package was deleted successfully
+            print(f"Package {package_file} successfully deleted from library.")
 
     def packageupdate(self, package_file):
 
@@ -1047,7 +1113,7 @@ class SpectraLogicAPI:
             end_time = (datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             if self.debug:
-                print(f"START_TIME: {start_time}", file=sys.stderr)
+                print(f"[DEBUG] START_TIME: {start_time}", file=sys.stderr, flush=True)
 
             # Here we retrieve a list of all the tasks and whittle it down
             # to the tasks started over the past 7 days. The API only provides
@@ -1095,7 +1161,7 @@ class SpectraLogicAPI:
                     raise(Exception(f"Error: Timed out waiting for {operation} to complete"))
                 else:
                     if self.debug:
-                        print(f"{i}: {state} {api_response}", file=sys.stderr)
+                        print(f"[DEBUG] {i}: {state} {api_response}", file=sys.stderr, flush=True)
                     elif self.verbose:
                         print(f".", end="", flush=True)
                         dot_printed = True
@@ -1156,7 +1222,7 @@ class SpectraLogicAPI:
             tree = self.run_command(url)
 
         except Exception as e:
-            print("Logout Error: " + str(e), file=sys.stderr)
+            print("Logout Error: " + str(e), file=sys.stderr, flush=True)
 
         self.loggedin       = False
         self.token          = ""
@@ -1554,7 +1620,7 @@ def main():
         if args.configfile == default_configfile and os.access(args.configfile, os.R_OK) is False:
             pass
         elif os.access(args.configfile, os.R_OK) is False:
-            print("Cannot access configfile " + args.configfile, file=sys.stderr)
+            print("Cannot access configfile " + args.configfile, file=sys.stderr, flush=True)
             sys.exit(1)
 
         cfgparser = configparser.ConfigParser(allow_no_value=True)
@@ -1699,7 +1765,7 @@ def main():
 
         except lumosapi_client.exceptions.UnauthorizedException as e:
             if slapi.verbose:
-                print("Unauthorized...Logging in again...", file=sys.stderr)
+                print("Unauthorized...Logging in again...", file=sys.stderr, flush=True)
             slapi.login()
             # If we are not logged in at this point we have a problem
             if not slapi.loggedin and slapi.num_tries >= 1:
@@ -1708,15 +1774,15 @@ def main():
                 lumosapi_client.exceptions.NotFoundException,
                 lumosapi_client.exceptions.UnprocessableEntityException) as e:
             json_doc = json.loads(e.body)
-            print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr)
+            print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr, flush=True)
             sys.exit(1)
         except Exception as e:
             fullcommand = args.command
             if hasattr(args, "subcommand") and args.subcommand is not None:
                 fullcommand = args.command + " " + args.subcommand
-            print("Command '" + fullcommand + "': " + str(e), file=sys.stderr)
+            print(f"Command '{fullcommand}': {str(e)}", file=sys.stderr, flush=True)
             if slapi.debug:
-                print(type(e), file=sys.stderr)
+                print(f"[DEBUG] {type(e)}", file=sys.stderr, flush=True)
             sys.exit(1)
         finally:
             slapi.num_tries = slapi.num_tries + 1
