@@ -310,6 +310,77 @@ class SpectraLogicAPI:
     #==========================================================================
     # DEFINE SHARED COMMAND FUNCTIONS
     #==========================================================================
+    def list_range(self, values):
+        # Remove surrounding brackets if present
+        values = values.strip()
+        if values.startswith("[") and values.endswith("]"):
+            values = values[1:-1]
+
+        expanded_values = []
+        for v in values.split(","):
+            v = v.strip()
+            if "-" in v:
+                start, end = v.split("-", 1)
+                start = int(start)
+                end = int(end)
+                if start > end:
+                    print(f'ERROR: Start range is greater than end.')
+                    sys.exit(1) 
+                expanded_values.extend(range(start, end + 1))
+            else:
+                expanded_values.append(int(v))
+        return expanded_values
+
+    def get_drive_names(self, drives_list):
+        physical_drives = []
+        logical_drives = []      
+            
+        drives = re.split(r',(?![^\[]*\])', drives_list)
+        print(drives)
+        for d in drives:
+            d = d.strip()
+            print(d)
+            match = re.match(r'(\[(\d|\-|\,)+\]|\d+)\:(\[(\d|\-|\,)+\]|\d+)\:(\[(\d|\-|\,)+\]|\d+)', d)
+            if match:
+                frame = self.list_range(match.group(1))
+                dba = self.list_range(match.group(3))
+                chamber = self.list_range(match.group(5))
+                # Expands the drive lists
+                for f in frame:
+                    for d in dba:
+                        for c in chamber:
+                            physical_drives.append(f'{f}:{d}:{c}')
+            else:
+                print("ERROR: Please make sure the drive address follows the correct format. Ex: 1:6:2 or [1-9,11]:[1-6]:[1-4]")
+                sys.exit(1)
+
+        # Make sure we have a list of physical drives
+        if len(physical_drives) == 0:
+            print('ERROR: No drives were specified.')
+            sys.exit(1)
+        
+        # Getting the logical location based on the physical location provided by the user
+        physical_drives_tmp = physical_drives.copy()
+        drive_dataframe = self.get_partition_dataframe()
+        for partition in drive_dataframe['drives']:
+            dataframe_drives = pandas.DataFrame.from_dict(partition)
+            dataframe_drives['location'] = dataframe_drives['location'].apply(drivelocation_to_string)
+            dataframe_drives['physicalLocation'] = dataframe_drives['physicalLocation'].apply(drivelocation_to_string)
+            for drive in physical_drives:
+                idx = dataframe_drives['physicalLocation'].str.contains(drive)
+                if not dataframe_drives[idx].empty:
+                    # Removes a drive we found the logical location for
+                    physical_drives_tmp.remove(drive)
+                    logical_drives.append(dataframe_drives[idx]['name'].values[0])
+        
+        # Let the user know of any locations we could not find
+        if len(physical_drives_tmp) != 0:
+            print(f"Unable to find the logical location for the following drives: {physical_drives_tmp}")
+        if len(logical_drives) == 0:
+            print('ERROR: No drives were specified.')
+            sys.exit(1)
+        
+        return logical_drives
 
     def get_partition_dataframe(self, partition=None):
 
@@ -384,6 +455,64 @@ class SpectraLogicAPI:
     #==========================================================================
     # DEFINE COMMAND FUNCTIONS
     #==========================================================================
+    def drivefirmwareabort(self):
+        
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+            api_response = api_instance.abort_drive_firmware_staging()
+        
+            if api_response == None:
+                print('Abort was successful')
+    
+    def drivefirmwarecommit(self, drives_list, wait=True):
+
+        # Drives need to use logical address
+        drives = self.get_drive_names(drives_list)
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+            api_response = api_instance.start_commit_drive_firmware(drives)
+            task_id = api_response.task_id
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=1800, operation="drive firmware commit") # timeout=30 mins
+                print(f"Drive firmware commit succeeded for the following drives (logical addresses): {drives}.")
+            else:
+                print(f"Drive firmware commit started. TaskId: {task_id}")
+            
+    def drivefirmwarestage(self, drives_list, firmware_file, wait=True):
+
+        # Drives need to use logical address
+        drives = self.get_drive_names(drives_list)
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+            api_response = api_instance.start_stage_drive_firmware(drives, firmware_file=firmware_file)
+            task_id = api_response.task_id
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=21600, operation="drive firmware stage") # timeout=6 hours
+                print(f"Drive firmware stage succeeded for the following drives (logical addresses): {drives}.")
+            else:
+                print(f"Drive firmware stage started. This process takes a few hours to complete. TaskId: {task_id}")
+
+    def drivefirmwarestagelist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            api_response = api_instance.get_drive_firmware_staging()
+            processed_data = {key: obj.to_dict() for key, obj in api_response.items()}
+            dataframe = pandas.DataFrame.from_dict(processed_data, orient='index')
+            dataframe.insert(0, "Drive", dataframe.index)
+            json_df = dataframe.to_json(orient='records')
+            dataframe = pandas.json_normalize(json.loads(json_df))
+
+            self.slapi_print(dataframe)
 
     def dlmlist(self):
 
@@ -430,6 +559,7 @@ class SpectraLogicAPI:
         dataframe_drives.pop('location')
         dataframe_drives.pop('exporting')
         dataframe_drives.pop('patchLevel')
+        
         self.slapi_print(dataframe_drives)
 
     def drivesummary(self):
@@ -1381,6 +1511,28 @@ def main():
     dlmlist_parser = cmdsubparsers.add_parser('dlmlist',
         help='Retrieve a list of DLM records in the library.')
 
+    drivefirmware_parser = cmdsubparsers.add_parser('drivefirmware',
+        help='drivefirmware command help.')
+    drivefirmware_subparser = drivefirmware_parser.add_subparsers(title="subcommands", dest="subcommand")
+    
+    drivefirmware_abort_parser = drivefirmware_subparser.add_parser('abort',
+        help='Abort the current drive firmware staging operation')
+
+    drivefirmware_commit_parser = drivefirmware_subparser.add_parser('commit',
+        help='Commit the staged drive firmware to the specified drives')
+    drivefirmware_commit_parser.add_argument('drives_list', action='store',
+        help='Specify a list of physical addresses for the drives the firmware is being committed staged to. Example: \"1:6:1, 1:6:[3-4]\"')
+
+    drivefirmware_stage_parser = drivefirmware_subparser.add_parser('stage',
+        help='Stage firmware to the drives. This can take about 4 hours or more.')
+    drivefirmware_stage_parser.add_argument('drives_list', action='store',
+        help='Specify a list of physical addresses for the drives the firmware is being staged to. Example: \"1:6:1, 1:6:[3-4]\"')
+    drivefirmware_stage_parser.add_argument('firmware_file', action='store',
+        help='Firmware file (.dts type)')
+
+    drivefirmware_stagelist_parser = drivefirmware_subparser.add_parser('stagelist',
+        help='Get the list of staged firmware on the drives')
+
     drivelist_parser = cmdsubparsers.add_parser('drivelist',
         help='Retrieve the drives in the library.')
 
@@ -1616,6 +1768,17 @@ def main():
                 sys.exit(1)
             elif args.command == "dlmlist":
                 slapi.dlmlist()
+            elif args.command == "drivefirmware":
+                if args.subcommand == "abort":
+                    slapi.drivefirmwareabort()
+                elif args.subcommand == "commit":
+                    slapi.drivefirmwarecommit(drives_list=args.drives_list)
+                elif args.subcommand == "stage":
+                    slapi.drivefirmwarestage(drives_list=args.drives_list, firmware_file=args.firmware_file)
+                elif args.subcommand == "stagelist":
+                    slapi.drivefirmwarestagelist()
+                else:
+                    raise(Exception(f"drivefirmware: Unknown option {args.subcommand}"))
             elif args.command == "drivelist":
                 slapi.drivelist(partition=args.partition)
             elif args.command == "drivesummary":
@@ -1706,7 +1869,9 @@ def main():
                 sys.exit(1)
         except (lumosapi_client.exceptions.ConflictException,
                 lumosapi_client.exceptions.NotFoundException,
-                lumosapi_client.exceptions.UnprocessableEntityException) as e:
+                lumosapi_client.exceptions.UnprocessableEntityException,
+                lumosapi_client.exceptions.BadRequestException) as e:
+
             json_doc = json.loads(e.body)
             print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr)
             sys.exit(1)
