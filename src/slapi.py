@@ -472,7 +472,7 @@ class SpectraLogicAPI:
             if dataframe.empty:
                 print("The freepool is empty.")
                 return
-            dataframe = dataframe.expload('media')
+            dataframe = dataframe.explode('media')
             self.slapi_print(dataframe)
 
     def frus(self):
