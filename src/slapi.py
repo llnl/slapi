@@ -469,6 +469,9 @@ class SpectraLogicAPI:
             api_response = api_instance.get_free_pool_magazines()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            if dataframe == None:
+                print("The freepool is empty.")
+                return
             self.slapi_print(dataframe)
 
     def frus(self):
