@@ -458,7 +458,7 @@ class SpectraLogicAPI:
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
 
-    def getfreepool(self):
+    def getfreepoolmagazinelist(self):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -1409,7 +1409,7 @@ def main():
     environmentlist_parser = cmdsubparsers.add_parser('environmentlist',
         help='Get the library environmental settings.')
 
-    freepool_parser = cmdsubparsers.add_parser('freepool', 
+    freepool_parser = cmdsubparsers.add_parser('freepoolmagazinelist', 
         help='List out the magazines in free pool.')
 
     frus_parser = cmdsubparsers.add_parser('frus',
@@ -1641,8 +1641,8 @@ def main():
                 slapi.drivesummary()
             elif args.command == "environmentlist":
                 slapi.environmentlist()
-            elif args.command == "freepool":
-                slapi.getfreepool()
+            elif args.command == "freepoolmagazinelist":
+                slapi.getfreepoolmagazinelist()
             elif args.command == "frus":
                 slapi.frus()
             elif args.command == "humidity":
