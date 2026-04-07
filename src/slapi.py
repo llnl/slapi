@@ -470,8 +470,8 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             if dataframe.empty:
-                print("The freepool is empty.")
-                return
+                columns = ["barcode", "media", "mediaType"]
+                dataframe = pandas.DataFrame(columns=columns)
             dataframe = dataframe.explode('media')
             self.slapi_print(dataframe)
 
