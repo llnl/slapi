@@ -692,13 +692,16 @@ class SpectraLogicAPI:
                 # Below we explicitly set the _request_timeout.
                 # We have seen problematic drives take 5-10 minutes to respond to this API
                 # call, so make sure to limit how long we wait here.
-                # If we fail we mark the state as UNKNOWN.
+                # If we fail we mark the state as SLAPI_UNKNOWN.
                 try:
                     api_response = api_instance.get_fru_status(fru['name'], _request_timeout=10.0)
                     json_doc_fru = api_response.to_json()
                 except urllib3.exceptions.MaxRetryError as e:
+                    if self.debug:
+                        print(f"[DEBUG] Problem getting FRU status for: {fru['name']}...", file=sys.stderr, flush=True)
+
                     json_string = { "name": fru['name'],
-                                    "status": "UNKNOWN",
+                                    "status": "SLAPI_UNKNOWN",
                                     "type": fru['type']
                     }
                     json_doc_fru = json.dumps(json_string)
