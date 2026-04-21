@@ -1112,10 +1112,11 @@ class SpectraLogicAPI:
 
             # Remove package from the library
             api_response = api_instance.delete_package(package_file)
+
             # If we got here assume the package was deleted successfully
             print(f"Package {package_file} successfully deleted from library.")
 
-    def packageupdate(self, package_file):
+    def packageupdate(self, package_file, wait=True):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -1841,9 +1842,9 @@ def main():
                 if args.subcommand == "abort":
                     slapi.drivefirmwareabort()
                 elif args.subcommand == "commit":
-                    slapi.drivefirmwarecommit(drives_list=args.drives_list)
+                    slapi.drivefirmwarecommit(drives_list=args.drives_list, wait=args.wait)
                 elif args.subcommand == "stage":
-                    slapi.drivefirmwarestage(drives_list=args.drives_list, firmware_file=args.firmware_file)
+                    slapi.drivefirmwarestage(drives_list=args.drives_list, firmware_file=args.firmware_file, wait=args.wait)
                 elif args.subcommand == "stagelist":
                     slapi.drivefirmwarestagelist()
                 else:
@@ -1870,7 +1871,7 @@ def main():
                 elif args.subcommand == "download":
                     slapi.logdownload(logname=args.logname, logtype=args.logtype, logdate=args.logdate)
                 elif args.subcommand == "rimtousb":
-                    slapi.logdownloadrimtousb(rim=args.rim)
+                    slapi.logdownloadrimtousb(rim=args.rim, wait=args.wait)
                 else:
                     raise(Exception(f"log: Unknown option {args.subcommand}"))
             elif args.command == "login":
@@ -1889,7 +1890,7 @@ def main():
                 elif args.subcommand == "delete":
                     slapi.packagedelete(args.package_file)
                 elif args.subcommand == "update":
-                    slapi.packageupdate(args.package_file)
+                    slapi.packageupdate(args.package_file, wait=args.wait)
                 elif args.subcommand == "upload":
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
