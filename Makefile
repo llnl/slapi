@@ -10,15 +10,21 @@ MODULERELEASE          := $(shell cat MODULERELEASE)
 PACKAGENAME             = slapi
 PACKAGEVERSION         := $(shell cat VERSION)
 PACKAGERELEASE         := $(shell cat RELEASE)
+GENERATORVERSION       := $(shell cat GENERATORVERSION)
+GENERATORURL           := https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/$(GENERATORVERSION)/openapi-generator-cli-$(GENERATORVERSION).jar
 BUILDSOURCE             = --buildsource
 URL                     = ssh://git@izgitlab.llnl.gov:7999/ssg/$(PACKAGENAME).git
-JAVA_HOME              := /etc/alternatives/jre_21
+JAVA_HOME              ?= /etc/alternatives/jre_21
 PATH                   := $(JAVA_HOME)/bin:$(PATH)
 
 all: $(PACKAGENAME)
 
-.quilt-lumosapi-client:
-	java -DmaxYamlCodePoints=99999999 -jar ./lib/lumosapi-client/generator/openapi-generator-cli.jar generate --skip-validate-spec -i ./lib/lumosapi-client/api/lumos.spec --inline-schema-options REFACTOR_ALLOF_INLINE_SCHEMAS=true --additional-properties=useOneOfDiscriminatorLookup=true --additional-properties=disallowAdditionalPropertiesIfNotPresent=false -g python -o src/lumosapi_client -p packageName=lumosapi_client -p packageVersion=$(MODULEVERSION)
+.openapi-generator-cli:
+	curl --silent --show-error --fail -L $(GENERATORURL) -o ./lib/lumosapi-client/generator/openapi-generator-cli-$(GENERATORVERSION).jar
+	touch .openapi-generator-cli
+
+.quilt-lumosapi-client: .openapi-generator-cli
+	java -DmaxYamlCodePoints=99999999 -jar ./lib/lumosapi-client/generator/openapi-generator-cli-$(GENERATORVERSION).jar generate --skip-validate-spec -i ./lib/lumosapi-client/api/lumos.spec --inline-schema-options REFACTOR_ALLOF_INLINE_SCHEMAS=true --additional-properties=useOneOfDiscriminatorLookup=true --additional-properties=disallowAdditionalPropertiesIfNotPresent=false -g python -o src/lumosapi_client -p packageName=lumosapi_client -p packageVersion=$(MODULEVERSION)
 	./scripts/quilt-lumosapi.pl
 
 $(PACKAGENAME): .quilt-lumosapi-client
@@ -58,5 +64,6 @@ rpms: $(PACKAGENAME)
 	./scripts/build-rpm.pl --name $(PACKAGENAME) --pythonversion $(PYTHONVERSION) $(BUILDSOURCE) --snapshot -s . -f specs/$(PACKAGENAME).spec
 
 clean:
-	rm -rf .quilt* tags cscope.*
+	rm -rf .quilt* .openapi-generator-cli tags cscope.*
+	rm -rf ./lib/lumosapi-client/generator/openapi-generator-cli*.jar
 	cd src && ./autoclean.sh

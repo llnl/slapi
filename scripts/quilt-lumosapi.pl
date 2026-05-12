@@ -123,13 +123,13 @@ sub verify_patches
         if (!$sb)
         {
             print(STDERR "Patch $patch does not exist.\n");
-            print(STDERR "Likely someone forgot to check it into subversion.\n");
+            print(STDERR "Likely someone forgot to push it upstream.\n");
             exit(-1);
         }
         elsif ($sb->size == 0)
         {
             print(STDERR "Patch $patch is empty.\n");
-            print(STDERR "Likely someone forgot to check it into subversion.\n");
+            print(STDERR "Likely someone forgot to push it upstream.\n");
             exit(-1);
         }
     }

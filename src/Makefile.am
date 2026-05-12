@@ -12,7 +12,8 @@ EXTRA = \
 doc_DATA = $(EXTRA)
 
 do_subst = sed -e 's,[@]PACKAGE[@],$(PACKAGE),g' \
-            -e 's,[@]VERSION[@],$(VERSION),g'
+               -e 's,[@]VERSION[@],$(VERSION),g' \
+               -e 's,[@]PYTHON[@],$(PYTHON),g'
 
 slapi: slapi.py
 	$(do_subst) < $(srcdir)/slapi.py > slapi

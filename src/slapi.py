@@ -1,6 +1,6 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env @PYTHON@
 #
-# Copyright (C) 2019 Lawrence Livermore National Security, LLC
+# Copyright (C) 2026 Lawrence Livermore National Security, LLC
 # Please see top-level LICENSE for details.
 #
 # This program is free software: you can redistribute it and/or modify it under
