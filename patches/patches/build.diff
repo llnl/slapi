@@ -381,7 +381,7 @@ Index: lumosapi_client/lumosapi_client/models/library_humidity_metrics.py
 +
  class LibraryHumidityMetrics(BaseModel):
      """
-     LibraryHumidityMetrics
+     Humidity metrics for the library. Available sensor data is dependent on library hardware configuration. If any chassis sensors are present, robot sensors are not needed and will be disabled.
 @@ -48,7 +50,7 @@ class LibraryHumidityMetrics(BaseModel):
      def to_json(self) -> str:
          """Returns the JSON representation of the model using alias"""
@@ -403,7 +403,7 @@ Index: lumosapi_client/lumosapi_client/models/library_temperature_metrics.py
 +
  class LibraryTemperatureMetrics(BaseModel):
      """
-     LibraryTemperatureMetrics
+     Temperature metrics for the library. Available sensor data is dependent on library hardware configuration. If any chassis sensors are present, robot sensors are not needed and will be disabled.
 @@ -48,7 +50,7 @@ class LibraryTemperatureMetrics(BaseMode
      def to_json(self) -> str:
          """Returns the JSON representation of the model using alias"""
