@@ -24,7 +24,7 @@ all: $(PACKAGENAME)
 	touch .openapi-generator-cli
 
 .quilt-lumosapi-client: .openapi-generator-cli
-	java -DmaxYamlCodePoints=99999999 -jar ./lib/lumosapi-client/generator/openapi-generator-cli-$(GENERATORVERSION).jar generate --skip-validate-spec -i ./lib/lumosapi-client/api/lumos.spec --inline-schema-options REFACTOR_ALLOF_INLINE_SCHEMAS=true --additional-properties=useOneOfDiscriminatorLookup=true --additional-properties=disallowAdditionalPropertiesIfNotPresent=false -g python -o src/lumosapi_client -p packageName=lumosapi_client -p packageVersion=$(MODULEVERSION)
+	java -DmaxYamlCodePoints=99999999 -jar ./lib/lumosapi-client/generator/openapi-generator-cli-$(GENERATORVERSION).jar generate --skip-validate-spec -i ./lib/lumosapi-client/api/lumos.spec --inline-schema-options REFACTOR_ALLOF_INLINE_SCHEMAS=true --additional-properties=useOneOfDiscriminatorLookup=true --additional-properties=disallowAdditionalPropertiesIfNotPresent=false --additional-properties=lazyImports=true -g python -o src/lumosapi_client -p packageName=lumosapi_client -p packageVersion=$(MODULEVERSION)
 	./scripts/quilt-lumosapi.pl
 
 $(PACKAGENAME): .quilt-lumosapi-client
