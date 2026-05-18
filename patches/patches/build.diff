@@ -1,13 +1,13 @@
 Index: lumosapi_client/README
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ lumosapi_client/README	2025-11-21 10:19:29.500401000 -0800
+--- /dev/null
++++ lumosapi_client/README
 @@ -0,0 +1 @@
 +This is the LLNL patched version of the LumOS client
 Index: lumosapi_client/lumosapi_client/rest.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/rest.py	2025-12-10 16:51:54.588474000 -0800
-+++ lumosapi_client/lumosapi_client/rest.py	2025-11-21 10:19:29.502414000 -0800
+--- lumosapi_client.orig/lumosapi_client/rest.py
++++ lumosapi_client/lumosapi_client/rest.py
 @@ -18,6 +18,7 @@ import re
  import ssl
  
@@ -16,7 +16,7 @@ Index: lumosapi_client/lumosapi_client/rest.py
  
  from lumosapi_client.exceptions import ApiException, ApiValueError
  
-@@ -65,6 +66,12 @@ class RESTClientObject:
+@@ -70,6 +71,12 @@ class RESTClientObject:
          # https://github.com/shazow/urllib3/blob/f9409436f83aeb79fbaf090181cd81b784f1b8ce/urllib3/connectionpool.py#L680  # noqa: E501
          # Custom SSL certificates and client certificates: http://urllib3.readthedocs.io/en/latest/advanced-usage.html  # noqa: E501
  
@@ -29,7 +29,7 @@ Index: lumosapi_client/lumosapi_client/rest.py
          # cert_reqs
          if configuration.verify_ssl:
              cert_reqs = ssl.CERT_REQUIRED
-@@ -76,7 +83,7 @@ class RESTClientObject:
+@@ -81,7 +88,7 @@ class RESTClientObject:
              "ca_certs": configuration.ssl_ca_cert,
              "cert_file": configuration.cert_file,
              "key_file": configuration.key_file,
@@ -40,8 +40,8 @@ Index: lumosapi_client/lumosapi_client/rest.py
              pool_args['assert_hostname'] = (
 Index: lumosapi_client/lumosapi_client/models/fru_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/fru_list.py	2025-12-10 16:51:52.916577000 -0800
-+++ lumosapi_client/lumosapi_client/models/fru_list.py	2025-11-21 10:19:29.505399000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/fru_list.py
++++ lumosapi_client/lumosapi_client/models/fru_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.fru import F
  from typing import Optional, Set
  from typing_extensions import Self
@@ -62,8 +62,8 @@ Index: lumosapi_client/lumosapi_client/models/fru_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/package.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/package.py	2025-12-10 16:51:53.438540000 -0800
-+++ lumosapi_client/lumosapi_client/models/package.py	2025-11-21 10:19:29.507408000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/package.py
++++ lumosapi_client/lumosapi_client/models/package.py
 @@ -24,6 +24,8 @@ from lumosapi_client.models.firmware imp
  from typing import Optional, Set
  from typing_extensions import Self
@@ -84,8 +84,8 @@ Index: lumosapi_client/lumosapi_client/models/package.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/datetime_encoder.py
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ lumosapi_client/lumosapi_client/models/datetime_encoder.py	2025-11-21 11:22:58.764958000 -0800
+--- /dev/null
++++ lumosapi_client/lumosapi_client/models/datetime_encoder.py
 @@ -0,0 +1,18 @@
 +# coding: utf-8
 +
@@ -107,8 +107,8 @@ Index: lumosapi_client/lumosapi_client/models/datetime_encoder.py
 +            return super().default(z)
 Index: lumosapi_client/lumosapi_client/models/package_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/package_list.py	2025-12-10 16:51:53.444526000 -0800
-+++ lumosapi_client/lumosapi_client/models/package_list.py	2025-11-21 10:19:29.510402000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/package_list.py
++++ lumosapi_client/lumosapi_client/models/package_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.package impo
  from typing import Optional, Set
  from typing_extensions import Self
@@ -129,8 +129,8 @@ Index: lumosapi_client/lumosapi_client/models/package_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/library_status.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/library_status.py	2025-12-10 16:51:53.124548000 -0800
-+++ lumosapi_client/lumosapi_client/models/library_status.py	2025-11-21 10:19:29.511418000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/library_status.py
++++ lumosapi_client/lumosapi_client/models/library_status.py
 @@ -26,6 +26,8 @@ from lumosapi_client.models.ntp_status i
  from typing import Optional, Set
  from typing_extensions import Self
@@ -151,8 +151,8 @@ Index: lumosapi_client/lumosapi_client/models/library_status.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/task.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/task.py	2025-12-10 16:51:53.806514000 -0800
-+++ lumosapi_client/lumosapi_client/models/task.py	2025-11-21 10:19:29.513401000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/task.py
++++ lumosapi_client/lumosapi_client/models/task.py
 @@ -27,6 +27,8 @@ from lumosapi_client.models.task_types i
  from typing import Optional, Set
  from typing_extensions import Self
@@ -173,8 +173,8 @@ Index: lumosapi_client/lumosapi_client/models/task.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/task_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/task_list.py	2025-12-10 16:51:53.820510000 -0800
-+++ lumosapi_client/lumosapi_client/models/task_list.py	2025-11-21 10:19:29.514413000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/task_list.py
++++ lumosapi_client/lumosapi_client/models/task_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.task import
  from typing import Optional, Set
  from typing_extensions import Self
@@ -195,8 +195,8 @@ Index: lumosapi_client/lumosapi_client/models/task_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/status_message.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/status_message.py	2025-12-10 16:51:53.728527000 -0800
-+++ lumosapi_client/lumosapi_client/models/status_message.py	2025-12-10 16:52:45.876695000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/status_message.py
++++ lumosapi_client/lumosapi_client/models/status_message.py
 @@ -24,6 +24,8 @@ from lumosapi_client.models.severities i
  from typing import Optional, Set
  from typing_extensions import Self
@@ -217,8 +217,8 @@ Index: lumosapi_client/lumosapi_client/models/status_message.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/status_message_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/status_message_list.py	2025-12-10 16:51:53.734509000 -0800
-+++ lumosapi_client/lumosapi_client/models/status_message_list.py	2025-11-21 10:19:29.517413000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/status_message_list.py
++++ lumosapi_client/lumosapi_client/models/status_message_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.status_messa
  from typing import Optional, Set
  from typing_extensions import Self
@@ -239,8 +239,8 @@ Index: lumosapi_client/lumosapi_client/models/status_message_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/library_diagnostic.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/library_diagnostic.py	2025-12-10 16:51:53.058569000 -0800
-+++ lumosapi_client/lumosapi_client/models/library_diagnostic.py	2025-11-21 10:19:29.518425000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/library_diagnostic.py
++++ lumosapi_client/lumosapi_client/models/library_diagnostic.py
 @@ -28,6 +28,8 @@ from lumosapi_client.models.task_types i
  from typing import Optional, Set
  from typing_extensions import Self
@@ -261,8 +261,8 @@ Index: lumosapi_client/lumosapi_client/models/library_diagnostic.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/library_diagnostic_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/library_diagnostic_list.py	2025-12-10 16:51:53.068572000 -0800
-+++ lumosapi_client/lumosapi_client/models/library_diagnostic_list.py	2025-11-21 10:19:29.520408000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/library_diagnostic_list.py
++++ lumosapi_client/lumosapi_client/models/library_diagnostic_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.library_diag
  from typing import Optional, Set
  from typing_extensions import Self
@@ -283,8 +283,8 @@ Index: lumosapi_client/lumosapi_client/models/library_diagnostic_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/mlm_record.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/mlm_record.py	2025-12-10 16:51:53.201556000 -0800
-+++ lumosapi_client/lumosapi_client/models/mlm_record.py	2025-11-21 10:19:29.522402000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/mlm_record.py
++++ lumosapi_client/lumosapi_client/models/mlm_record.py
 @@ -32,6 +32,8 @@ from lumosapi_client.models.mlm_record_r
  from typing import Optional, Set
  from typing_extensions import Self
@@ -305,8 +305,8 @@ Index: lumosapi_client/lumosapi_client/models/mlm_record.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/mlm_record_read_write.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/mlm_record_read_write.py	2025-12-10 16:51:53.229549000 -0800
-+++ lumosapi_client/lumosapi_client/models/mlm_record_read_write.py	2025-11-21 10:19:29.523416000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/mlm_record_read_write.py
++++ lumosapi_client/lumosapi_client/models/mlm_record_read_write.py
 @@ -23,6 +23,8 @@ from typing import Any, ClassVar, Dict,
  from typing import Optional, Set
  from typing_extensions import Self
@@ -327,8 +327,8 @@ Index: lumosapi_client/lumosapi_client/models/mlm_record_read_write.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/mlm_list.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/mlm_list.py	2025-12-10 16:51:53.192537000 -0800
-+++ lumosapi_client/lumosapi_client/models/mlm_list.py	2025-11-21 10:19:29.524426000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/mlm_list.py
++++ lumosapi_client/lumosapi_client/models/mlm_list.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.mlm_record i
  from typing import Optional, Set
  from typing_extensions import Self
@@ -349,8 +349,8 @@ Index: lumosapi_client/lumosapi_client/models/mlm_list.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/humidity_reading.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/humidity_reading.py	2025-12-10 16:51:52.990553000 -0800
-+++ lumosapi_client/lumosapi_client/models/humidity_reading.py	2026-01-13 12:10:28.851439000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/humidity_reading.py
++++ lumosapi_client/lumosapi_client/models/humidity_reading.py
 @@ -23,6 +23,8 @@ from typing import Any, ClassVar, Dict,
  from typing import Optional, Set
  from typing_extensions import Self
@@ -371,8 +371,8 @@ Index: lumosapi_client/lumosapi_client/models/humidity_reading.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/library_humidity_metrics.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/library_humidity_metrics.py	2025-12-10 16:51:53.089565000 -0800
-+++ lumosapi_client/lumosapi_client/models/library_humidity_metrics.py	2026-01-13 12:10:35.817573000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/library_humidity_metrics.py
++++ lumosapi_client/lumosapi_client/models/library_humidity_metrics.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.humidity_rea
  from typing import Optional, Set
  from typing_extensions import Self
@@ -393,8 +393,8 @@ Index: lumosapi_client/lumosapi_client/models/library_humidity_metrics.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/library_temperature_metrics.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/library_temperature_metrics.py	2025-12-10 16:51:53.129552000 -0800
-+++ lumosapi_client/lumosapi_client/models/library_temperature_metrics.py	2026-01-13 13:12:34.051142000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/library_temperature_metrics.py
++++ lumosapi_client/lumosapi_client/models/library_temperature_metrics.py
 @@ -23,6 +23,8 @@ from lumosapi_client.models.temperature_
  from typing import Optional, Set
  from typing_extensions import Self
@@ -415,8 +415,8 @@ Index: lumosapi_client/lumosapi_client/models/library_temperature_metrics.py
      def from_json(cls, json_str: str) -> Optional[Self]:
 Index: lumosapi_client/lumosapi_client/models/temperature_reading.py
 ===================================================================
---- lumosapi_client.orig/lumosapi_client/models/temperature_reading.py	2025-12-10 16:51:53.832515000 -0800
-+++ lumosapi_client/lumosapi_client/models/temperature_reading.py	2026-01-13 13:12:45.874001000 -0800
+--- lumosapi_client.orig/lumosapi_client/models/temperature_reading.py
++++ lumosapi_client/lumosapi_client/models/temperature_reading.py
 @@ -23,6 +23,8 @@ from typing import Any, ClassVar, Dict,
  from typing import Optional, Set
  from typing_extensions import Self
