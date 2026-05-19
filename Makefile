@@ -13,7 +13,7 @@ PACKAGERELEASE         := $(shell cat RELEASE)
 GENERATORVERSION       := $(shell cat GENERATORVERSION)
 GENERATORURL           := https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/$(GENERATORVERSION)/openapi-generator-cli-$(GENERATORVERSION).jar
 BUILDSOURCE             = --buildsource
-URL                     = ssh://git@github.com:llnl/$(PACKAGENAME).git
+URL                     = git@github.com:LLNL/$(PACKAGENAME).git
 JAVA_HOME              ?= /etc/alternatives/jre_21
 PATH                   := $(JAVA_HOME)/bin:$(PATH)
 
