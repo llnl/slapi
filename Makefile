@@ -13,7 +13,7 @@ PACKAGERELEASE         := $(shell cat RELEASE)
 GENERATORVERSION       := $(shell cat GENERATORVERSION)
 GENERATORURL           := https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/$(GENERATORVERSION)/openapi-generator-cli-$(GENERATORVERSION).jar
 BUILDSOURCE             = --buildsource
-URL                     = ssh://git@izgitlab.llnl.gov:7999/ssg/$(PACKAGENAME).git
+URL                     = ssh://git@github.com:llnl/$(PACKAGENAME).git
 JAVA_HOME              ?= /etc/alternatives/jre_21
 PATH                   := $(JAVA_HOME)/bin:$(PATH)
 
@@ -42,13 +42,13 @@ cscope: .PHONY
 tag: .PHONY
 	@echo Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
 	git tag -a $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE) -m "Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)"
-	@echo To push your new tag to GitLab run:
+	@echo To push your new tag to GitHub run:
 	@echo git push origin $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
 
 tag-client: .PHONY
 	@echo Tagging this as python$(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)
 	git tag -a python$(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE) -m "Tagging this as python$(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)"
-	@echo To push your new tag to GitLab run:
+	@echo To push your new tag to GitHub run:
 	@echo git push origin python$(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)
 
 tags: .PHONY
