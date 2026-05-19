@@ -8,7 +8,12 @@ Getting Started
 ----------------
 
 In order to use SLAPI, you must have python3.11 installed on your system.
-Will document the dependencies/installation procedure in the future.
+
+    $ make
+    $ cd src/lumosapi_client
+    $ python3.11 setup.py bdist_wheel
+    $ pip3.11 install dist/lumosapi_client-3.0.1-py3-none-any.whl
+    $ pip3.11 install --upgrade requests urllib3 pandas
 
 Documentation
 ----------------
