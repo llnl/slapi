@@ -39,14 +39,17 @@ cscope: .PHONY
 	find ${PWD}/src -name .pc -prune -o -name '*.[chxsS]' -print > cscope.files
 	cscope -b -u -k -R
 
-svntag:
-	./scripts/svntag.pl $(PACKAGENAME) $(URL)
-
 tag: .PHONY
 	@echo Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
 	git tag -a $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE) -m "Tagging this as $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)"
 	@echo To push your new tag to GitLab run:
 	@echo git push origin $(PACKAGENAME)-$(PACKAGEVERSION)-$(PACKAGERELEASE)
+
+tag-client: .PHONY
+	@echo Tagging this as $(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)
+	git tag -a $(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE) -m "Tagging this as $(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)"
+	@echo To push your new tag to GitLab run:
+	@echo git push origin $(PYTHONVERSION)-$(PYTHONSHORTNAME)-$(MODULEVERSION)-$(MODULERELEASE)
 
 tags: .PHONY
 	ctags -R --exclude=.pc --exclude=.svn src
