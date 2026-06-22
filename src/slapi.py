@@ -1246,7 +1246,7 @@ class SpectraLogicAPI:
             # Create an instance of the API class
             api_instance = lumosapi_client.TFinityApi(api_client)
 
-            # Get info on the specified task
+            # Abort the specified task
             api_response = api_instance.abort_library_diagnostic(task_id)
             
             print(f"Task aborted successfully.")
@@ -1985,7 +1985,8 @@ def main():
         except (lumosapi_client.exceptions.ConflictException,
                 lumosapi_client.exceptions.NotFoundException,
                 lumosapi_client.exceptions.UnprocessableEntityException,
-                lumosapi_client.exceptions.BadRequestException) as e:
+                lumosapi_client.exceptions.BadRequestException,
+                lumosapi_client.exceptions.ForbiddenException) as e:
 
             json_doc = json.loads(e.body)
             print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr, flush=True)
