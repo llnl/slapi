@@ -1239,6 +1239,18 @@ class SpectraLogicAPI:
             # If we got here assume the syslog settings were updated successfully
             print(f"Syslog settings updated successfully.")
 
+    def taskabort(self, task_id):
+
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Abort the specified task
+            api_response = api_instance.abort_library_diagnostic(task_id)
+            
+            print(f"Task aborted successfully.")
+
     def taskinfo(self, task_id):
 
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -1771,6 +1783,12 @@ def main():
         help='task command help.')
     task_subparser = task_parser.add_subparsers(title="subcommands", dest="subcommand")
 
+
+    task_abort_parser = task_subparser.add_parser('abort',
+        help='Abort a specified task.')
+    task_abort_parser.add_argument('task_id', action='store',
+        help='Specific task id to abort.')
+    
     task_list_parser = task_subparser.add_parser('list',
         help='List tasks for library.')
 
@@ -1938,6 +1956,8 @@ def main():
             elif args.command == "task":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.tasklist()
+                elif args.subcommand == "abort":
+                    slapi.taskabort(task_id=args.task_id)
                 elif args.subcommand == "info":
                     slapi.taskinfo(task_id=args.task_id)
                 elif args.subcommand == "wait":
@@ -1965,7 +1985,8 @@ def main():
         except (lumosapi_client.exceptions.ConflictException,
                 lumosapi_client.exceptions.NotFoundException,
                 lumosapi_client.exceptions.UnprocessableEntityException,
-                lumosapi_client.exceptions.BadRequestException) as e:
+                lumosapi_client.exceptions.BadRequestException,
+                lumosapi_client.exceptions.ForbiddenException) as e:
 
             json_doc = json.loads(e.body)
             print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr, flush=True)
