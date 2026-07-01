@@ -823,6 +823,38 @@ class SpectraLogicAPI:
             self.slapi_print(None)
             self.slapi_print(dataframe_doors)
 
+    def licenselist(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get licenses stored on the library
+            api_response = api_instance.licenses()
+
+            # Looks like this api returns a list and does not have a to_json function
+            dataframe = pandas.DataFrame()
+            for license in api_response:
+                json_doc = license.to_json()
+                dataframe_new = pandas.json_normalize(json.loads(json_doc))
+                dataframe = pandas.concat([dataframe, dataframe_new], ignore_index=True)
+            self.slapi_print(dataframe)
+
+    def licenseadd(self, license_key):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Add new license to the library
+            add_license_request = lumosapi_client.AddLicenseRequest(license_key=license_key)
+            api_response = api_instance.add_license(add_license_request=add_license_request)
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc))
+            self.slapi_print(dataframe)
+
     def logdownload(self, logname=None, logtype=None, logdate=None):
         write_size = 1024
 
@@ -1667,6 +1699,18 @@ def main():
     librarystatus_parser = cmdsubparsers.add_parser('librarystatus',
         help='Retrieve library status information.')
 
+    license_parser = cmdsubparsers.add_parser('license',
+        help='license command help.')
+    license_subparser = license_parser.add_subparsers(title="subcommands", dest="subcommand")
+
+    license_list_parser = license_subparser.add_parser('list',
+        help='Retrieve a list of licenses currently installed on the library.')
+
+    license_add_parser = license_subparser.add_parser('add',
+        help='Install a new license on the library.')
+    license_add_parser.add_argument('license_key', action='store',
+        help='License key to install on library.')
+
     log_parser = cmdsubparsers.add_parser('log',
         help='log command help.')
     log_subparser = log_parser.add_subparsers(title="subcommands", dest="subcommand")
@@ -1722,7 +1766,7 @@ def main():
         help='Software package file to delete.')
 
     package_list_parser = package_subparser.add_parser('list',
-        help='List software packages sotred on the library.')
+        help='List software packages stored on the library.')
 
     package_update_parser = package_subparser.add_parser('update',
         help='Update library to new software package.')
@@ -1908,6 +1952,13 @@ def main():
                 slapi.inventoryfull(partition=args.partition)
             elif args.command == "librarystatus":
                 slapi.librarystatus()
+            elif args.command == "license":
+                if args.subcommand is None or args.subcommand == "list":
+                    slapi.licenselist()
+                elif args.subcommand == "add":
+                    slapi.licenseadd(args.license_key)
+                else:
+                    raise(Exception(f"package: Unknown option {args.subcommand}"))
             elif args.command == "log":
                 if args.subcommand is None or args.subcommand == "types":
                     slapi.logtypes()
@@ -1988,8 +2039,18 @@ def main():
                 lumosapi_client.exceptions.BadRequestException,
                 lumosapi_client.exceptions.ForbiddenException) as e:
 
+            if slapi.debug:
+                for attribute_name in dir(e):
+                    try:
+                        print(f"[DEBUG] {attribute_name}: {getattr(e, attribute_name)}", file=sys.stderr, flush=True)
+                    except AttributeError:
+                        pass
+
             json_doc = json.loads(e.body)
-            print(f"Error ({json_doc['error']['code']}): {json_doc['error']['message']}", file=sys.stderr, flush=True)
+            print(f"Error: {e.status}", file=sys.stderr, flush=True)
+            print(f"Reason: {e.reason}", file=sys.stderr, flush=True)
+            print(f"Message: {json_doc['error']['message']}", file=sys.stderr, flush=True)
+
             sys.exit(1)
         except Exception as e:
             fullcommand = args.command
