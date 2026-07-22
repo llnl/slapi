@@ -1084,6 +1084,23 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
+    def resetdrive(self, drive=None, wait=True):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Start the robot service action
+            api_response = api_instance.start_fru_action(drive, "RESET_DRIVE")
+            task_id = api_response.task_id
+
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=600, operation="robot move")
+                print(f"Drive reset completed.")
+            else:
+                print(f"Drive reset started. TaskId: {task_id}")
+
     def robotservice(self, robot=None, action=None, wait=True):
 
         # Enter a context with an instance of the API client
@@ -1779,6 +1796,11 @@ def main():
         help='Path to software package file to upload.')
     package_upload_parser.add_argument('pubkey_file', action='store',
         help='Path to software package verification file to upload.')
+    
+    resetdrive_parser = cmdsubparsers.add_parser('resetdrive',
+        help='Reset a drive')
+    resetdrive_parser.add_argument('drive',
+        action='store', default=None, help='Specify the logical location of the drive. Ex: Drive:4:2:1')
 
     robotservice_parser = cmdsubparsers.add_parser('robotservice',
         help='Send robot to/from service bay.')
@@ -1989,6 +2011,8 @@ def main():
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
                     raise(Exception(f"package: Unknown option {args.subcommand}"))
+            elif args.command == "resetdrive":
+                slapi.resetdrive(drive=args.drive, wait=args.wait)
             elif args.command == "robotservice":
                 slapi.robotservice(robot=args.robot, action=args.subcommand, wait=args.wait)
             elif args.command == "securityaudit":
