@@ -642,6 +642,27 @@ class SpectraLogicAPI:
         
         self.slapi_print(dataframe_drives)
 
+    def drivereset(self, drive, wait=True):
+
+        if(drive == None):
+            print("ERROR: Invalid drive value")
+            return
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Start the robot service action
+            api_response = api_instance.start_fru_action(drive, "RESET_DRIVE")
+            task_id = api_response.task_id
+
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=120, operation="drive reset")
+                print(f"Drive reset succeeded.")
+            else:
+                print(f"Drive reset started. TaskId: {task_id}")
+
     def drivesummary(self):
 
         # Enter a context with an instance of the API client
@@ -1083,23 +1104,6 @@ class SpectraLogicAPI:
                 print(f"Media move for {sourcebarcode} succeeded from {source_type}: {source} to {destination_type}: {destination}.")
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
-
-    def resetdrive(self, drive=None, wait=True):
-
-        # Enter a context with an instance of the API client
-        with lumosapi_client.ApiClient(self.configuration) as api_client:
-            # Create an instance of the API class
-            api_instance = lumosapi_client.TFinityApi(api_client)
-
-            # Start the robot service action
-            api_response = api_instance.start_fru_action(drive, "RESET_DRIVE")
-            task_id = api_response.task_id
-
-            if wait == True:
-                self.taskwait(task_id=task_id, timeout=600, operation="robot move")
-                print(f"Drive reset completed.")
-            else:
-                print(f"Drive reset started. TaskId: {task_id}")
 
     def robotservice(self, robot=None, action=None, wait=True):
 
@@ -1687,6 +1691,11 @@ def main():
     drivelist_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve drive information for. If the partition is omitted then all drives are returned.')
 
+    drivereset_parser = cmdsubparsers.add_parser('drivereset',
+        help='Reset a drive')
+    drivereset_parser.add_argument('drive',
+        action='store', default=None, help='Specify the logical location of the drive. Ex: Drive:4:2:1')
+
     drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
@@ -1796,11 +1805,6 @@ def main():
         help='Path to software package file to upload.')
     package_upload_parser.add_argument('pubkey_file', action='store',
         help='Path to software package verification file to upload.')
-    
-    resetdrive_parser = cmdsubparsers.add_parser('resetdrive',
-        help='Reset a drive')
-    resetdrive_parser.add_argument('drive',
-        action='store', default=None, help='Specify the logical location of the drive. Ex: Drive:4:2:1')
 
     robotservice_parser = cmdsubparsers.add_parser('robotservice',
         help='Send robot to/from service bay.')
@@ -1958,6 +1962,8 @@ def main():
                     raise(Exception(f"drivefirmware: Unknown option {args.subcommand}"))
             elif args.command == "drivelist":
                 slapi.drivelist(partition=args.partition)
+            elif args.command == "drivereset":
+                slapi.drivereset(drive=args.drive, wait=args.wait)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
             elif args.command == "environmentlist":
@@ -2011,8 +2017,6 @@ def main():
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
                     raise(Exception(f"package: Unknown option {args.subcommand}"))
-            elif args.command == "resetdrive":
-                slapi.resetdrive(drive=args.drive, wait=args.wait)
             elif args.command == "robotservice":
                 slapi.robotservice(robot=args.robot, action=args.subcommand, wait=args.wait)
             elif args.command == "securityaudit":
