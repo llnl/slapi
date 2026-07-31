@@ -645,8 +645,7 @@ class SpectraLogicAPI:
     def drivereset(self, drive, wait=True):
 
         if(drive == None):
-            print("ERROR: Invalid drive value")
-            return
+            raise(Exception(f"Error: Invalid drive value"))
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
