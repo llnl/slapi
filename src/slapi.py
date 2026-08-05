@@ -642,6 +642,26 @@ class SpectraLogicAPI:
         
         self.slapi_print(dataframe_drives)
 
+    def drivereset(self, drive, wait=True):
+
+        if(drive == None):
+            raise(Exception(f"Error: Invalid drive value"))
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Start the robot service action
+            api_response = api_instance.start_fru_action(drive, "RESET_DRIVE")
+            task_id = api_response.task_id
+
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=120, operation="drive reset")
+                print(f"Drive reset succeeded.")
+            else:
+                print(f"Drive reset started. TaskId: {task_id}")
+
     def drivesummary(self):
 
         # Enter a context with an instance of the API client
@@ -1670,6 +1690,11 @@ def main():
     drivelist_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve drive information for. If the partition is omitted then all drives are returned.')
 
+    drivereset_parser = cmdsubparsers.add_parser('drivereset',
+        help='Reset a drive')
+    drivereset_parser.add_argument('drive',
+        action='store', default=None, help='Specify the logical location of the drive. Ex: Drive:4:2:1')
+
     drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
         help='Get a summary of drives.')
 
@@ -1936,6 +1961,8 @@ def main():
                     raise(Exception(f"drivefirmware: Unknown option {args.subcommand}"))
             elif args.command == "drivelist":
                 slapi.drivelist(partition=args.partition)
+            elif args.command == "drivereset":
+                slapi.drivereset(drive=args.drive, wait=args.wait)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
             elif args.command == "environmentlist":
