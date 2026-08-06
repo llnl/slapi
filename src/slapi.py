@@ -642,9 +642,9 @@ class SpectraLogicAPI:
         
         self.slapi_print(dataframe_drives)
 
-    def drivereset(self, drive, wait=True):
+    def drivereset(self, drive_name, wait=True):
 
-        if(drive == None):
+        if(drive_name == None):
             raise(Exception(f"Error: Invalid drive value"))
 
         # Enter a context with an instance of the API client
@@ -653,11 +653,11 @@ class SpectraLogicAPI:
             api_instance = lumosapi_client.TFinityApi(api_client)
 
             # Start the robot service action
-            api_response = api_instance.start_fru_action(drive, "RESET_DRIVE")
+            api_response = api_instance.start_fru_action(drive_name, "RESET_DRIVE")
             task_id = api_response.task_id
 
             if wait == True:
-                self.taskwait(task_id=task_id, timeout=120, operation="drive reset")
+                self.taskwait(task_id=task_id, timeout=300, operation="drive reset")
                 print(f"Drive reset succeeded.")
             else:
                 print(f"Drive reset started. TaskId: {task_id}")
@@ -1692,7 +1692,7 @@ def main():
 
     drivereset_parser = cmdsubparsers.add_parser('drivereset',
         help='Reset a drive')
-    drivereset_parser.add_argument('drive',
+    drivereset_parser.add_argument('drive_name',
         action='store', default=None, help='Specify the logical location of the drive. Ex: Drive:4:2:1')
 
     drivesummary_parser = cmdsubparsers.add_parser('drivesummary',
@@ -1962,7 +1962,7 @@ def main():
             elif args.command == "drivelist":
                 slapi.drivelist(partition=args.partition)
             elif args.command == "drivereset":
-                slapi.drivereset(drive=args.drive, wait=args.wait)
+                slapi.drivereset(drive_name=args.drive_name, wait=args.wait)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
             elif args.command == "environmentlist":
