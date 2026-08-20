@@ -688,7 +688,7 @@ class SpectraLogicAPI:
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
 
-    def getfreepoolmagazinelist(self):
+    def freepoolmagazinelist(self):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -705,7 +705,7 @@ class SpectraLogicAPI:
             dataframe = dataframe.explode('media')
             self.slapi_print(dataframe)
 
-    def frus(self):
+    def frus_list(self):
 
         # Enter a context with an instance of the API client
         with lumosapi_client.ApiClient(self.configuration) as api_client:
@@ -721,7 +721,61 @@ class SpectraLogicAPI:
             dataframe.pop('actions.value')
 
             fru_type = None
-            dataframe_fru = None
+            dataframe_fru_info = None
+            for index, fru in dataframe.iterrows():
+
+                # Create a dataframe that includes all the metadata for the FRU item in question
+                # We explicitly remove all related fields that are empty
+                tmp_dataframe_fru_info = pandas.DataFrame([fru])
+                if fru['type'] != "DRIVE":
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='drive.').columns, axis=1, inplace=True)
+                if fru['hax.firmware'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='hax.').columns, axis=1, inplace=True)
+                if fru['physicalLocation.frame'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='physicalLocation.').columns, axis=1, inplace=True)
+                if fru['portA.addressMode'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portA.').columns, axis=1, inplace=True)
+                if fru['portB.addressMode'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portB.').columns, axis=1, inplace=True)
+                if fru['powerlineCAN.firmware'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='powerlineCAN.').columns, axis=1, inplace=True)
+                if fru['transporter.firmware'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='transporter.').columns, axis=1, inplace=True)
+                if fru['vax.firmware'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='vax.').columns, axis=1, inplace=True)
+                if fru['wwn'] != None:
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='wwn').columns, axis=1, inplace=True)
+
+                if fru['type'] != fru_type:
+                    if fru_type != None:
+                        self.slapi_print(dataframe_fru_info)
+                        self.slapi_print(None)
+                    dataframe_fru_info = tmp_dataframe_fru_info
+                    printheader = True
+                    fru_type = fru['type']
+                else:
+                    dataframe_fru_info = pandas.concat([dataframe_fru_info, tmp_dataframe_fru_info])
+
+            # Print the final one
+            self.slapi_print(dataframe_fru_info)
+
+    def frus_status(self):
+
+        # Enter a context with an instance of the API client
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get Metadata for FRUs in the library
+            api_response = api_instance.get_frus()
+
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+            dataframe.pop('actions.count')
+            dataframe.pop('actions.value')
+
+            fru_type = None
+            dataframe_fru_status = None
             for index, fru in dataframe.iterrows():
                 if self.debug:
                     print(f"[DEBUG] Getting FRU status for: {fru['name']}...", file=sys.stderr, flush=True)
@@ -743,20 +797,20 @@ class SpectraLogicAPI:
                     }
                     json_doc_fru = json.dumps(json_string)
 
-                tmp_dataframe_fru = pandas.json_normalize(json.loads(json_doc_fru))
+                tmp_dataframe_fru_status = pandas.json_normalize(json.loads(json_doc_fru))
 
                 if fru['type'] != fru_type:
                     if fru_type != None:
-                        self.slapi_print(dataframe_fru)
+                        self.slapi_print(dataframe_fru_status)
                         self.slapi_print(None)
-                    dataframe_fru = tmp_dataframe_fru
+                    dataframe_fru_status = tmp_dataframe_fru_status
                     printheader = True
                     fru_type = fru['type']
                 else:
-                    dataframe_fru = pandas.concat([dataframe_fru, tmp_dataframe_fru])
+                    dataframe_fru_status = pandas.concat([dataframe_fru_status, tmp_dataframe_fru_status])
 
             # Print the final one
-            self.slapi_print(dataframe_fru)
+            self.slapi_print(dataframe_fru_status)
 
     def humiditymetrics(self):
 
@@ -1705,7 +1759,14 @@ def main():
         help='List out the magazines in free pool.')
 
     frus_parser = cmdsubparsers.add_parser('frus',
-        help='Retrieve a list of hardware field replaceable units currently in the library.')
+        help='Retrieve a list of hardware field replaceable unit status currently in the library.')
+    frus_subparser = frus_parser.add_subparsers(title="subcommands", dest="subcommand")
+
+    frus_list_parser = frus_subparser.add_parser('list',
+        help='Retrieve a list of hardware field replaceable unit metadata currently in the library.')
+
+    frus_status_parser = frus_subparser.add_parser('status',
+        help='Retrieve a list of hardware field replaceable unit status currently in the library. (Default if subcommand not specified.)')
 
     humidity_parser = cmdsubparsers.add_parser('humidity',
         help='Get the current humidity reading from the library.')
@@ -1714,7 +1775,6 @@ def main():
         help='Retrieve inventory from the library.')
     inventory_parser.add_argument('partition', action='store', nargs='?',
         help='Library partition to retrieve inventory for. If the partition is omitted then all partitions are returned.')
-
 
     inventoryfull_parser = cmdsubparsers.add_parser('inventoryfull',
         help='Retrieve inventory from the library (including magazine info).')
@@ -1968,9 +2028,14 @@ def main():
             elif args.command == "environmentlist":
                 slapi.environmentlist()
             elif args.command == "freepoolmagazinelist":
-                slapi.getfreepoolmagazinelist()
+                slapi.freepoolmagazinelist()
             elif args.command == "frus":
-                slapi.frus()
+                if args.subcommand is None or args.subcommand == "status":
+                    slapi.frus_status()
+                elif args.subcommand == "list":
+                    slapi.frus_list()
+                else:
+                    raise(Exception(f"frus: Unknown option {args.subcommand}"))
             elif args.command == "humidity":
                 slapi.humiditymetrics()
             elif args.command == "inventory":
