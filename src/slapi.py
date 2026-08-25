@@ -1158,6 +1158,17 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
+    def moveabort(self, taskid):
+        # Enter a context with an instance of the API client                    
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class                               
+            api_instance = lumosapi_client.TFinityApi(api_client)   
+                                                                                
+        api_response = api_instance.abort_move(task_id) # Not sure this is correct          
+        json_doc = api_response.to_json()                           
+        dataframe = pandas.json_normalize(json.loads(json_doc))     
+        self.slapi_print(dataframe)
+
     def robotservice(self, robot=None, action=None, wait=True):
 
         # Enter a context with an instance of the API client
@@ -1840,7 +1851,7 @@ def main():
     move_parser.add_argument('destination', action='store',
         type=int,
         help='Destination location to move tape cartridge to.')
-    move_parser.add_argument('abort-move', action='store',
+    move_parser.add_argument('abort', action='store',
         help='Attempt to abort a move using task id.')
 
     package_parser = cmdsubparsers.add_parser('package',
@@ -2072,6 +2083,8 @@ def main():
                 slapi.mlmlist()
             elif args.command == "move":
                 slapi.move(partition=args.partition, sourcebarcode=args.sourcebarcode, destination=args.destination, wait=args.wait)
+                if args.subcommand == "abort":
+                    slapi.moveabort()
             elif args.command == "package":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.packagelist()
