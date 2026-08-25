@@ -1158,16 +1158,22 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
-    def moveabort(self, taskid):
+    def moveabort(self, taskid, wait=True):
         # Enter a context with an instance of the API client                    
         with lumosapi_client.ApiClient(self.configuration) as api_client:
             # Create an instance of the API class                               
             api_instance = lumosapi_client.TFinityApi(api_client)   
                                                                                 
-        api_response = api_instance.abort_move(task_id) # Not sure this is correct          
-        json_doc = api_response.to_json()                           
-        dataframe = pandas.json_normalize(json.loads(json_doc))     
-        self.slapi_print(dataframe)
+            api_response = api_instance.abort_move(task_id) # Not sure this is correct
+            abort_task_id = api_response.task_id
+            json_doc = api_response.to_json()                           
+            dataframe = pandas.json_normalize(json.loads(json_doc))     
+            
+            if wait == True:
+                self.taskwait(task_id=task_id, timeout=1800, operation="move abort") # timeout=30 mins
+                print(f"Move abort succeeded.")
+            else:
+                print(f"Move abort started. TaskId: {abort_task_id}")
 
     def robotservice(self, robot=None, action=None, wait=True):
 
@@ -1851,9 +1857,8 @@ def main():
     move_parser.add_argument('destination', action='store',
         type=int,
         help='Destination location to move tape cartridge to.')
-    move_parser.add_argument('abort', action='store',
-        help='Attempt to abort a move using task id.')
-
+    move_abort_parser = move_subparser.add_parser('abort',  
+        help='Abort a move that is in progress.')
     package_parser = cmdsubparsers.add_parser('package',
         help='package command help.')
     package_subparser = package_parser.add_subparsers(title="subcommands", dest="subcommand")
@@ -2081,10 +2086,10 @@ def main():
                 slapi.messages()
             elif args.command == "mlmlist":
                 slapi.mlmlist()
+            elif args.command == "abort":
+                slapi.moveabort(task_id=args.task_id)
             elif args.command == "move":
                 slapi.move(partition=args.partition, sourcebarcode=args.sourcebarcode, destination=args.destination, wait=args.wait)
-                if args.subcommand == "abort":
-                    slapi.moveabort()
             elif args.command == "package":
                 if args.subcommand is None or args.subcommand == "list":
                     slapi.packagelist()
