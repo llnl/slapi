@@ -1840,6 +1840,8 @@ def main():
     move_parser.add_argument('destination', action='store',
         type=int,
         help='Destination location to move tape cartridge to.')
+    move_parser.add_argument('abort-move', action='store',
+        help='Attempt to abort a move using task id.')
 
     package_parser = cmdsubparsers.add_parser('package',
         help='package command help.')
