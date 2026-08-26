@@ -727,24 +727,24 @@ class SpectraLogicAPI:
                 # Create a dataframe that includes all the metadata for the FRU item in question
                 # We explicitly remove all related fields that are empty
                 tmp_dataframe_fru_info = pandas.DataFrame([fru])
-                if fru['type'] != "DRIVE":
+                if 'drive.address' in fru and pandas.isna(fru['hax.firmware']):
                     tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='drive.').columns, axis=1, inplace=True)
-                if fru['hax.firmware'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='hax.').columns, axis=1, inplace=True)
-                if fru['physicalLocation.frame'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='physicalLocation.').columns, axis=1, inplace=True)
-                if fru['portA.addressMode'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portA.').columns, axis=1, inplace=True)
-                if fru['portB.addressMode'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portB.').columns, axis=1, inplace=True)
-                if fru['powerlineCAN.firmware'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='powerlineCAN.').columns, axis=1, inplace=True)
-                if fru['transporter.firmware'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='transporter.').columns, axis=1, inplace=True)
-                if fru['vax.firmware'] != None:
-                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='vax.').columns, axis=1, inplace=True)
-                if fru['wwn'] != None:
+                if 'wwn' in fru and pandas.isna(fru['wwn']):
                     tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='wwn').columns, axis=1, inplace=True)
+                if 'physicalLocation.frame' in fru and pandas.isna(fru['physicalLocation.frame']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='physicalLocation.').columns, axis=1, inplace=True)
+                if 'portA.addressMode' in fru and pandas.isna(fru['portA.addressMode']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portA.').columns, axis=1, inplace=True)
+                if 'portB.addressMode' in fru and pandas.isna(fru['portB.addressMode']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='portB.').columns, axis=1, inplace=True)
+                if 'hax.firmware' in fru and pandas.isna(fru['hax.firmware']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='hax.').columns, axis=1, inplace=True)
+                if 'vax.firmware' in fru and pandas.isna(fru['vax.firmware']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='vax.').columns, axis=1, inplace=True)
+                if 'transporter.firmware' in fru and pandas.isna(fru['transporter.firmware']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='transporter.').columns, axis=1, inplace=True)
+                if 'powerlineCAN.firmware' in fru and pandas.isna(fru['powerlineCAN.firmware']):
+                    tmp_dataframe_fru_info.drop(tmp_dataframe_fru_info.filter(regex='powerlineCAN.').columns, axis=1, inplace=True)
 
                 if fru['type'] != fru_type:
                     if fru_type != None:
