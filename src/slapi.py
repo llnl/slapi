@@ -1158,16 +1158,14 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
-    def moveabort(self, taskid, wait=True):
+    def moveabort(self, taskid):
         # Enter a context with an instance of the API client                    
         with lumosapi_client.ApiClient(self.configuration) as api_client:
             # Create an instance of the API class                               
             api_instance = lumosapi_client.TFinityApi(api_client)   
                                                                                 
-            api_response = api_instance.abort_move(task_id) # Not sure this is correct
+            api_response = api_instance.abort_move(task_id)
             abort_task_id = api_response.task_id
-            json_doc = api_response.to_json()                           
-            dataframe = pandas.json_normalize(json.loads(json_doc))     
             
             if wait == True:
                 self.taskwait(task_id=task_id, timeout=1800, operation="move abort") # timeout=30 mins
