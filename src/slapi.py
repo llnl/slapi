@@ -294,7 +294,7 @@ class SpectraLogicAPI:
 
     #--------------------------------------------------------------------------
     #
-    def token_expires_soon(self, timeout=120):
+    def token_expires_soon(self, timeout=300):
 
         if self.tokenexpiresat < 0 or self.tokenexpiresat < timeout:
             return(True)
@@ -313,10 +313,10 @@ class SpectraLogicAPI:
 
     #--------------------------------------------------------------------------
     #
-    def token_refresh(self, timeout=10):
+    def token_refresh(self, timeout=60):
 
         # Do not attempt to refresh the token if not initialized yet
-        if self.tokenexpiresat < 0 or self.refreshuntil < 0 or self.refreshuntil < timeout:
+        if self.tokenexpiresat < 0 or self.refreshuntil < 0 or self.tokenexpiresat < timeout or self.refreshuntil < timeout:
             if self.verbose:
                 print(f"Not attempting token refresh. Expire time: {self.tokenexpiresat} Refresh until: {self.refreshuntil}", file=sys.stderr, flush=True)
             return
@@ -324,16 +324,22 @@ class SpectraLogicAPI:
         now_dt            = datetime.datetime.now()
         tokenexpiresat_dt = datetime.datetime.fromtimestamp(self.tokenexpiresat)
         refreshuntil_dt   = datetime.datetime.fromtimestamp(self.refreshuntil)
-        soon_dt           = refreshuntil_dt - datetime.timedelta(seconds=timeout)
+        soon_refresh_dt   = refreshuntil_dt - datetime.timedelta(seconds=timeout)
+        soon_expires_dt   = tokenexpiresat_dt - datetime.timedelta(seconds=timeout)
 
         if now_dt >= tokenexpiresat_dt:
             if self.verbose:
                 print(f"Token is already expired. Now: {now_dt} Expire time: {tokenexpiresat_dt} Refresh until: {refreshuntil_dt}", file=sys.stderr, flush=True)
             return
 
-        if now_dt >= soon_dt:
+        if now_dt >= soon_expires_dt:
             if self.verbose:
-                print(f"Token refresh until is close. Refusing to automatically refresh. Now: {now_dt} Soon: {soon_dt} Refresh until: {refreshuntil_dt}", file=sys.stderr, flush=True)
+                print(f"Token expires at is close. Refusing to automatically refresh. Now: {now_dt} Soon: {soon_expires_dt} Refresh until: {tokenexpiresat_dt}", file=sys.stderr, flush=True)
+            return
+
+        if now_dt >= soon_refresh_dt:
+            if self.verbose:
+                print(f"Token refresh until is close. Refusing to automatically refresh. Now: {now_dt} Soon: {soon_refresh_dt} Refresh until: {refreshuntil_dt}", file=sys.stderr, flush=True)
             return
 
         if self.token_expires_soon():
