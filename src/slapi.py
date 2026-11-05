@@ -1164,6 +1164,29 @@ class SpectraLogicAPI:
             else:
                 print(f"Media move for {sourcebarcode} started. TaskId: {task_id}")
 
+    def partitionlist(self):
+        
+        dataframe_partition = self.get_partition_dataframe()
+        dataframe_partition.pop('id')
+        dataframe_partition.pop('drives')
+        dataframe_partition.pop('slotAddressOffset')
+        dataframe_partition.pop('eeSlotAddressOffset')
+        dataframe_partition.pop('driveAddressOffset')
+        dataframe_partition.pop('slotIQ')
+        dataframe_partition.pop('softLoad')
+        dataframe_partition.pop('cleaningPartition')
+        dataframe_partition.pop('mlmDiscoveryMode')
+        dataframe_partition.pop('readElementStatusInformation')
+        dataframe_partition.pop('barcodeOptions.checksumBehavior')
+        dataframe_partition.pop('barcodeOptions.truncation')
+        dataframe_partition.pop('barcodeOptions.length')
+        dataframe_partition.pop('quickPostScan.afterTime')
+        dataframe_partition.pop('quickPostScan.afterRead')
+        dataframe_partition.pop('quickPostScan.afterWrite')
+        dataframe_partition.pop('rims')
+        
+        self.slapi_print(dataframe_partition)
+
     def robotservice(self, robot=None, action=None, wait=True):
 
         # Enter a context with an instance of the API client
@@ -1871,6 +1894,9 @@ def main():
     package_upload_parser.add_argument('pubkey_file', action='store',
         help='Path to software package verification file to upload.')
 
+    partitionlist_parser = cmdsubparsers.add_parser('partitionlist',
+        help='Retrieve the partitions in the library.')
+
     robotservice_parser = cmdsubparsers.add_parser('robotservice',
         help='Send robot to/from service bay.')
     robotservice_subparser = robotservice_parser.add_subparsers(title="subcommands", dest="subcommand", required=True)
@@ -2087,6 +2113,8 @@ def main():
                     slapi.packageupload(args.package_file, args.pubkey_file)
                 else:
                     raise(Exception(f"package: Unknown option {args.subcommand}"))
+            elif args.command == "partitionlist":
+                slapi.partitionlist()
             elif args.command == "robotservice":
                 slapi.robotservice(robot=args.robot, action=args.subcommand, wait=args.wait)
             elif args.command == "securityaudit":
