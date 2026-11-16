@@ -1,0 +1,6 @@
+requests==2.34.2
+pandas==3.1.1
+pytz==2026.6
+pydantic==2.14.3
+lazy_imports==1.2.0
+tabulate==0.10.0

@@ -1,0 +1,5 @@
+1) Add gitignore for build files.
+2) Update spec file for OpenAPI generation.
+3) Update mlm and dlm listing to use `api/mlm-dlm/mounts` rather than
+deprecated endpoints `api/mlm-records/` & `api/dlm-records`.
+4) add requirements.txt for easier install

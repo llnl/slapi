@@ -1,1 +1,1 @@
-lumos-3.1.2.spec
+lumos-3.2.0.spec

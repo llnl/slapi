@@ -4,17 +4,24 @@ SLAPI is a command-line tool that communicates with Spectra Logic tape
 libraries using their LumOS REST API.  This provides a simple way to
 administer and monitor Spectra Logic tape libraries in large data centers.
 
+Prerequisites
+----------------
+
+Build requirements for SLAPI are:
+```bash
+python 3.11+
+Java 25 OpenJDK
+Automake
+Quilt
+```
+
 Getting Started
 ----------------
 
-In order to use SLAPI, you must have python3.11 installed on your system.
-
     $ make
-    $ cd src/lumosapi_client
-    $ python3.11 setup.py bdist_wheel
-    $ pip3.11 install ./dist/lumosapi_client-$(cat ../../MODULEVERSION)-py3-none-any.whl
-    $ pip3.11 install --upgrade requests urllib3 pandas pytz
-    $ cd ..
+    $ pip install src/lumosapi_client -r src/requirements.txt
+
+SLAPI binary will be generated in `src/slapi`.
 
 Configuration files
 ----------------
