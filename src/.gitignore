@@ -1,0 +1,9 @@
+autom4te.cache
+config
+lumosapi_client
+Makefile.in
+aclocal.*
+config*
+slapi
+stamp-h1
+Makefile

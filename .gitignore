@@ -1,0 +1,5 @@
+lib/lumosapi-client/generator/openapi-generator-cli-*
+.openapi-generator-cli
+.quilt-lumosapi-client
+.quilt
+.venv
