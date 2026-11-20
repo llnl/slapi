@@ -61,6 +61,19 @@ def driveport_to_string(driveport):
         return(f"{mystr}")
     return str(driveport)
 
+def list_tape_alerts(tape_alerts: list[dict]) -> list[str]:
+    """Convert tape alerts from [{value:"xyz"}...] -> ["xzy"] for pretty printing.
+    Args:
+        tape_alerts: List of tape alerts from `mlmdlm/mounts/*` endpoint.
+    Returns:
+        List of strings.
+    """
+    output = []
+    if isinstance(tape_alerts, list):
+        for obj in tape_alerts:
+            output.append(obj['value'])
+    return output
+
 class SpectraLogicLoginError(Exception):
 
     LoginErrorRaised = False
@@ -608,21 +621,12 @@ class SpectraLogicAPI:
             api_instance = lumosapi_client.TFinityApi(api_client)
 
             # Get DLM Records from the library
-            api_response = api_instance.get_dlm()
+            api_response = api_instance.get_most_recent_mlmdlm_mount_per_drive()
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
-            #dataframe = dataframe.sort_values(by=['currentPartition', 'barcode', 'tapeSerial'])
 
-            #dataframe.pop('MAMReadOnLoad')
-            #dataframe.pop('isTapeRead')
-            #dataframe.pop('lastLoadedPartition')
-            #dataframe.pop('manufacturerID')
-            #dataframe.pop('firstWriteLibrary')
-            #dataframe.pop('firstWritePartition')
-            #dataframe.pop('export')
-            #dataframe.pop('import')
-            #dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('readWrite.')]
-            #dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
+            # Extract tape alerts into list for better readability
+            dataframe["tapeAlerts"] = dataframe["tapeAlerts"].map(list_tape_alerts)
 
             self.slapi_print(dataframe)
 
@@ -1100,21 +1104,31 @@ class SpectraLogicAPI:
             api_instance = lumosapi_client.TFinityApi(api_client)
 
             # Get MLM Records from the library
-            api_response = api_instance.get_mlm()
+            api_response = api_instance.get_most_recent_mlmdlm_mount_per_tape()
             json_doc = api_response.to_json()
-            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
-            dataframe = dataframe.sort_values(by=['currentPartition', 'barcode', 'tapeSerial'])
 
-            dataframe.pop('MAMReadOnLoad')
-            dataframe.pop('isTapeRead')
-            dataframe.pop('lastLoadedPartition')
-            dataframe.pop('manufacturerID')
-            dataframe.pop('firstWriteLibrary')
-            dataframe.pop('firstWritePartition')
-            dataframe.pop('export')
-            dataframe.pop('import')
-            dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('readWrite.')]
-            dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
+            # Bring nested obj values to root
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path="value")
+            dataframe = dataframe.sort_values(
+                by=["libraryPartition", "barcode", "tapeSerialNumber"]
+            )
+
+            # Remove these fields
+            dataframe.pop("readThisLoad")
+            dataframe.pop("manufacturerID")
+            dataframe.pop("mostRecentReadPartition")
+
+            # Extract tape alerts into list for better readability
+            dataframe["tapeAlerts"] = dataframe["tapeAlerts"].map(list_tape_alerts)
+
+            # Remove fields which begin with:
+            dataframe = dataframe.loc[:, ~dataframe.columns.str.startswith("first")]
+            dataframe = dataframe.loc[
+                :, ~dataframe.columns.str.startswith("driveDisplay.")
+            ]
+            dataframe = dataframe.loc[
+                :, ~dataframe.columns.str.startswith("driveLogicalLocation.")
+            ]
 
             self.slapi_print(dataframe)
 
