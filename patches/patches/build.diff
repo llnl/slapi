@@ -457,3 +457,26 @@ Index: lumosapi_client/lumosapi_client/models/license.py
  
      @classmethod
      def from_json(cls, json_str: str) -> Optional[Self]:
+Index: lumosapi_client/lumosapi_client/models/most_recent_mlmdlm_mount_per_tape_list.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/most_recent_mlmdlm_mount_per_tape_list.py
++++ lumosapi_client/lumosapi_client/models/most_recent_mlmdlm_mount_per_tape_list.py
+@@ -24,2 +24,4 @@
+ from typing_extensions import Self
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+ class MostRecentMLMDLMMountPerTapeList(BaseModel):
+@@ -52,1 +52,1 @@
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
+Index: lumosapi_client/lumosapi_client/models/most_recent_mlmdlm_mount_per_drive_list.py
+===================================================================
+--- lumosapi_client.orig/lumosapi_client/models/most_recent_mlmdlm_mount_per_drive_list.py
++++ lumosapi_client/lumosapi_client/models/most_recent_mlmdlm_mount_per_drive_list.py
+@@ -24,1 +24,3 @@
+ from typing_extensions import Self
++from lumosapi_client.models.datetime_encoder import DateTimeEncoder
++
+@@ -50,1 +50,1 @@
+-        return json.dumps(self.to_dict())
++        return json.dumps(self.to_dict(),cls=DateTimeEncoder)
