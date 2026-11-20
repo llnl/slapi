@@ -694,6 +694,47 @@ class SpectraLogicAPI:
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
 
+    def emptyterapacks(self):
+        """Find Empty terapacks inside the library."""
+
+        with lumosapi_client.ApiClient(self.configuration) as api_client:
+            # Create an instance of the API class
+            api_instance = lumosapi_client.TFinityApi(api_client)
+
+            # Get magazine from API
+            api_response = api_instance.get_magazines()
+            json_doc = api_response.to_json()
+            dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
+
+            # Explode dataframe on "slots" column, to break each tape slot into a unique row
+            dataframe = dataframe.explode('slots')
+            # Reset index to align popped slots value later
+            dataframe = dataframe.reset_index(drop=True)
+
+            # Convert each tape dict into a pandas row, using pop so we don't have to drop later
+            df_tape = pandas.DataFrame(dataframe.pop('slots').values.tolist())
+
+            # Join both dataframes together
+            dataframe = dataframe.join(df_tape)
+
+            # Select rows which are either a I/E slot or occupied by a tape (has mediaBarcode)
+            selection_mask = (dataframe['containerType'] == 'IE_SLOT') | (
+                ~dataframe['mediaBarcode'].isnull()
+            )
+            df = dataframe.loc[selection_mask]
+
+            # Extract out their barcodes
+            non_empty_packs = pandas.unique(df['barcode'])
+
+            # Using barcodes of non-empty terapacks invert selection.
+            empty_df = dataframe.loc[~dataframe['barcode'].isin(non_empty_packs)]
+            empty_packs = pandas.unique(empty_df['barcode'])
+
+            out_str = f'{len(empty_packs)} Empty terapacks: ' + ', '.join(empty_packs)
+
+            self.slapi_print(empty_df)
+            print(out_str)
+
     def freepoolmagazinelist(self):
 
         # Enter a context with an instance of the API client
@@ -1811,6 +1852,10 @@ def main():
     librarystatus_parser = cmdsubparsers.add_parser('librarystatus',
         help='Retrieve library status information.')
 
+    emptyterapacks_parser = cmdsubparsers.add_parser(
+        'emptyterapacks', help='Get empty terapacks inside library.'
+    )
+
     license_parser = cmdsubparsers.add_parser('license',
         help='license command help.')
     license_subparser = license_parser.add_subparsers(title="subcommands", dest="subcommand")
@@ -2055,6 +2100,8 @@ def main():
                 slapi.drivereset(drive_name=args.drive_name, wait=args.wait)
             elif args.command == "drivesummary":
                 slapi.drivesummary()
+            elif args.command == 'emptyterapacks':
+                slapi.emptyterapacks()
             elif args.command == "environmentlist":
                 slapi.environmentlist()
             elif args.command == "freepoolmagazinelist":
