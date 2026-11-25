@@ -1,0 +1,22 @@
+[project]
+name = "slapi"
+version = "2.2.6"
+# lumosapi_client - which is generated through openAPI generator - is a requirement.
+# It must be build & installed before installing SLAPI as a python module.
+dependencies = [
+    "requests>=2.34.2",
+    "pandas>=3.1.1",
+    "pytz>=2026.6",
+    "pydantic>=2.14.3",
+    "lazy_imports>=1.2.0",
+    "tabulate>=0.10.0",
+    "lumosapi_client>=3.1.2"
+]
+
+# Make scripts in src available in the "slapi" pip package.
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+# Make SLAPI executable when venv is activated.
+[project.scripts]
+slapi = "slapi:main"
