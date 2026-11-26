@@ -14,7 +14,8 @@ In order to use SLAPI, you must have python3.11 installed on your system.
     $ python3.11 setup.py bdist_wheel
     $ pip3.11 install ./dist/lumosapi_client-$(cat ../../MODULEVERSION)-py3-none-any.whl
     $ pip3.11 install --upgrade requests urllib3 pandas pytz
-    $ cd ..
+    $ cd ../..
+    $ pip install .
 
 Configuration files
 ----------------
