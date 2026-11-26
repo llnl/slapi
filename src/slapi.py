@@ -599,6 +599,7 @@ class SpectraLogicAPI:
             dataframe = pandas.json_normalize(json.loads(json_df))
 
             self.slapi_print(dataframe)
+            return dataframe
 
     def dlmlist(self):
 
@@ -625,6 +626,7 @@ class SpectraLogicAPI:
             #dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
 
             self.slapi_print(dataframe)
+            return dataframe
 
     def drivelist(self, partition=None):
 
@@ -680,6 +682,7 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
+            return dataframe
 
     def environmentlist(self):
 
@@ -693,6 +696,7 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc), record_path='value')
             self.slapi_print(dataframe)
+            return dataframe
 
     def freepoolmagazinelist(self):
 
@@ -710,6 +714,7 @@ class SpectraLogicAPI:
                 dataframe = pandas.DataFrame(columns=columns)
             dataframe = dataframe.explode('media')
             self.slapi_print(dataframe)
+            return dataframe
 
     def frus_list(self):
 
@@ -764,6 +769,7 @@ class SpectraLogicAPI:
 
             # Print the final one
             self.slapi_print(dataframe_fru_info)
+            return dataframe_fru_info
 
     def frus_status(self):
 
@@ -817,6 +823,7 @@ class SpectraLogicAPI:
 
             # Print the final one
             self.slapi_print(dataframe_fru_status)
+            return dataframe_fru_status
 
     def humiditymetrics(self):
 
@@ -867,6 +874,7 @@ class SpectraLogicAPI:
                 dataframe.insert(address_column_index+1, "sourceAddress", source_address_column)
 
             self.slapi_print(dataframe)
+            return dataframe
 
     def inventoryfull(self, partition=None):
 
@@ -902,6 +910,7 @@ class SpectraLogicAPI:
             self.slapi_print(dataframe)
             self.slapi_print(None)
             self.slapi_print(dataframe_doors)
+            return (dataframe,dataframe_doors)
 
     def licenselist(self):
 
@@ -1075,6 +1084,7 @@ class SpectraLogicAPI:
             ignore_column = dataframe.pop('slot.containerState')
             dataframe = dataframe.rename(columns={'barcode': 'magazineBarcode'})
             self.slapi_print(dataframe)
+            return dataframe
 
     def messages(self):
 
@@ -1091,6 +1101,7 @@ class SpectraLogicAPI:
             dataframe.pop('uid')
             dataframe.pop('id')
             self.slapi_print(dataframe)
+            return dataframe
 
     def mlmlist(self):
 
@@ -1117,6 +1128,7 @@ class SpectraLogicAPI:
             dataframe = dataframe.loc[:,~dataframe.columns.str.startswith('encryption.')]
 
             self.slapi_print(dataframe)
+            return dataframe
 
     def move(self, partition, sourcebarcode, destination, wait=True):
 
@@ -1252,6 +1264,7 @@ class SpectraLogicAPI:
             dataframe_active['firmware.version'] = firmware_version_column
             dataframe_active = dataframe_active.add_prefix('active.')
             self.slapi_print(dataframe_active)
+            return dataframe
 
     def packagedelete(self, package_file):
 
@@ -1332,6 +1345,7 @@ class SpectraLogicAPI:
             dataframe_exploded = dataframe.explode('taskLog')
             dataframe_tasklog = dataframe_exploded.pop('taskLog')
             self.slapi_print(dataframe_tasklog)
+            return dataframe_tasklog
 
     def spec(self):
 
@@ -1356,6 +1370,7 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc))
             self.slapi_print(dataframe)
+            return dataframe
 
     def syslogupdate(self, syslog_server=None, syslog_port=514):
 
@@ -1396,6 +1411,7 @@ class SpectraLogicAPI:
             json_doc = api_response.to_json()
             dataframe = pandas.json_normalize(json.loads(json_doc))
             self.slapi_print(dataframe)
+            return dataframe
 
     def tasklist(self):
 
@@ -1423,6 +1439,7 @@ class SpectraLogicAPI:
             dataframe = dataframe.sort_values(by=['startTime'])
             dataframe_current_tasks = dataframe[dataframe['startTime'] >= start_time]
             self.slapi_print(dataframe_current_tasks)
+            return dataframe_current_tasks
 
     def taskwait(self, task_id, timeout=None, operation="operation"):
 
