@@ -61,6 +61,98 @@ def driveport_to_string(driveport):
         return(f"{mystr}")
     return str(driveport)
 
+def parse_config(args, default_configfile):
+    """Parse arguments from slapi.conf file
+    Args:
+        args: commandline arguments dict
+        default_configfile: list of string paths
+
+    Returns:
+        Updated arguments with config vars
+    """
+    if args.configfile is None:
+        # If no config has been provided, then check default locations
+        for path in default_configfile:
+            if os.access(path, os.R_OK):
+                args.configfile = path
+                break
+        if args.configfile is None:
+            # we cannot access any of the default config files
+            print(
+                "Cannot access configfile in default path.", file=sys.stderr, flush=True
+            )
+            sys.exit(1)
+    elif os.access(args.configfile, os.R_OK) is False:
+        print(
+            "Cannot access configfile " + args.configfile, file=sys.stderr, flush=True
+        )
+        sys.exit(1)
+
+    cfgparser = configparser.ConfigParser(allow_no_value=True)
+    cfgparser.read(args.configfile)
+
+    try:
+        config = cfgparser[args.server]
+    except Exception as e:
+        config = cfgparser["DEFAULT"]
+
+    try:
+        if args.server is None:
+            if config.get("server"):
+                args.server = config["server"]
+        if args.user is None:
+            if config.get("username"):
+                args.user = config["username"]
+        if args.passwd is None:
+            if config.get("password"):
+                args.passwd = config["password"]
+            if "password" in config.keys():
+                if config["password"] is None or config["password"] == "":
+                    args.passwd = ""
+        if args.insecure is None or args.insecure == False:
+            if config.get("insecure"):
+                args.insecure = config.getboolean("insecure")
+        if args.json is None or args.json == False:
+            if config.get("json"):
+                args.json = config.getboolean("json")
+        if args.debug is None or args.debug == False:
+            if config.get("debug"):
+                args.debug = config.getboolean("debug")
+        if args.verbose is None or args.verbose == False:
+            if config.get("verbose"):
+                args.verbose = config.getboolean("verbose")
+        if args.port is None:
+            if config.get("port"):
+                args.port = config.getint("port")
+
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+    return args
+
+def slapi_directory():
+
+    home = os.path.expanduser("~")
+    if os.path.exists(home) == False:
+        raise (Exception(f"{home} does not exist."))
+    if os.path.isdir(home) == False:
+        raise (Exception(f"{home} is not a directory."))
+
+    slapidir = home + "/.slapi"
+    if os.path.exists(slapidir):
+        if os.path.isdir(slapidir):
+            return slapidir
+        else:
+            raise (Exception(f"{slapidir} is not a directory."))
+    else:
+        # Directory does not exist
+        # Let's try to create it
+        try:
+            os.mkdir(slapidir, 0o700)
+            return slapidir
+        except OSError as e:
+            raise (e)
+
 class SpectraLogicLoginError(Exception):
 
     LoginErrorRaised = False
@@ -88,7 +180,7 @@ class SpectraLogicAPI:
         self.tokenexpiresat    = -1
         self.refreshuntil      = -1
         self.wait              = args.wait
-        self.cookiefile        = self.slapi_directory() + "/cookies_lumos.txt"
+        self.cookiefile        = slapi_directory() + "/cookies_lumos.txt"
         if args.insecure == False:
             httpstr = "https://"
         else:
@@ -157,32 +249,6 @@ class SpectraLogicAPI:
                f"Token:         {self.token}\n"
                f"Expires At:    {datetime.datetime.fromtimestamp(self.tokenexpiresat)}\n"
                f"Refresh Until: {datetime.datetime.fromtimestamp(self.refreshuntil)}\n")
-
-    #--------------------------------------------------------------------------
-    #
-    def slapi_directory(self):
-
-        home = os.path.expanduser('~')
-        if os.path.exists(home) == False:
-            raise(Exception(f"{home} does not exist."))
-        if os.path.isdir(home) == False:
-            raise(Exception(f"{home} is not a directory."))
-
-        slapidir = home + "/.slapi"
-        if os.path.exists(slapidir):
-            if os.path.isdir(slapidir):
-                return(slapidir)
-            else:
-                raise(Exception(f"{slapidir} is not a directory."))
-        else:
-            # Directory does not exist
-            # Let's try to create it
-            try:
-                os.mkdir(slapidir, 0o700)
-                return(slapidir)
-            except OSError as e:
-                raise(e)
-
 
     #--------------------------------------------------------------------------
     #
@@ -1690,7 +1756,7 @@ class SpectraLogicAPI:
 def main():
 
     # Define defaults here
-    default_configfile = "/etc/slapi.conf"
+    default_configfile = ["/etc/slapi.conf", slapi_directory() + "/slapi.conf"]
 
     cmdparser     = argparse.ArgumentParser(description='Spectra Logic TFinity API Tool.')
     cmdsubparsers = cmdparser.add_subparsers(title="commands", dest="command")
@@ -1718,7 +1784,7 @@ def main():
                            help='Communicate with library over http:// instead of https://')
 
     cmdparser.add_argument('--config', '-c', dest='configfile', nargs='?',
-                           type=str, required=False, default=default_configfile,
+                           type=str, required=False, default=None,
                            help='Configuration file for Spectra Logic API.')
 
     cmdparser.add_argument('--server', '-s', dest='server',
@@ -1968,55 +2034,7 @@ def main():
     if args.passwd_prompt:
         args.passwd = getpass.getpass()
 
-    if args.configfile is not None:
-
-        if args.configfile == default_configfile and os.access(args.configfile, os.R_OK) is False:
-            pass
-        elif os.access(args.configfile, os.R_OK) is False:
-            print("Cannot access configfile " + args.configfile, file=sys.stderr, flush=True)
-            sys.exit(1)
-
-        cfgparser = configparser.ConfigParser(allow_no_value=True)
-        cfgparser.read(args.configfile)
-
-        try:
-            config = cfgparser[args.server]
-        except Exception as e:
-            config = cfgparser["DEFAULT"]
-
-        try:
-            if args.server is None:
-                if config.get("server"):
-                    args.server = config["server"]
-            if args.user is None:
-                if config.get("username"):
-                    args.user   = config["username"]
-            if args.passwd is None:
-                if config.get("password"):
-                    args.passwd = config["password"]
-                if "password" in config.keys():
-                    if config["password"] is None or config["password"] == "":
-                        args.passwd = ""
-            if args.insecure is None or args.insecure == False:
-                if config.get("insecure"):
-                    args.insecure = config.getboolean("insecure")
-            if args.json is None or args.json == False:
-                if config.get("json"):
-                    args.json = config.getboolean("json")
-            if args.debug is None or args.debug == False:
-                if config.get("debug"):
-                    args.debug = config.getboolean("debug")
-            if args.verbose is None or args.verbose == False:
-                if config.get("verbose"):
-                    args.verbose = config.getboolean("verbose")
-            if args.port is None:
-                if config.get("port"):
-                    args.port    = config.getint("port")
-
-        except Exception as e:
-            print(str(e))
-            cmdparser.print_help()
-            sys.exit(1)
+    args = parse_config(args, default_configfile)
 
     try:
         if args.server is None or args.server == "":
